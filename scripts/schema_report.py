@@ -65,13 +65,12 @@ def main() -> int:
 
     print()
     print(f"One configuration = {len(questions)} questions x {runs} runs")
-    print(
-        f"  uncached: {uncached / 1e6:>6.1f}M tokens  ->  {uncached / args.tpd:>5.1f} days at {args.tpd:,}/day"
-    )
-    print(
-        f"  cached:   {cached / 1e6:>6.1f}M tokens  ->  {cached / args.tpd:>5.1f} days at {args.tpd:,}/day"
-    )
-    print("  local:    no quota; wall-clock only")
+    print(f"Quota assumed: {args.tpd:,} tokens/day")
+    for label, tokens in (("uncached", uncached), ("cached", cached)):
+        days = tokens / args.tpd
+        millions = tokens / 1e6
+        print(f"  {label:<9} {millions:>6.1f}M tokens  ->  {days:>5.1f} days")
+    print("  local     no quota; wall-clock only")
     print()
     print(f"Caching saves {(uncached - cached) / uncached * 100:.0f}% of counted tokens.")
     return 0
