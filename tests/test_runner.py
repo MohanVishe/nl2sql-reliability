@@ -374,3 +374,41 @@ class TestProgress:
             on_attempt=lambda attempt, index, total: seen.append((index, total)),
         )
         assert seen == [(1, 3), (2, 3), (3, 3)]
+
+
+class TestResumeKeyRoundTrip:
+    """Resume compares keys built in memory against keys parsed back out of JSON.
+
+    Those two paths must agree on types. They did not: the dataset stored question_id as a
+    string while `completed_keys` cast it to int, so no key ever matched and a resumed run
+    silently repeated every attempt it had already paid for. Nothing crashed, and the results
+    file simply grew twice as fast as it should have.
+    """
+
+    def test_keys_written_match_keys_read_back(self, root, question, tmp_path):
+        out = tmp_path / "r.jsonl"
+        good = fenced("SELECT COUNT(*) FROM customer")
+        run_suite([question], StubGenerator(replies=[good]), k=2, arm="a", out_path=out, root=root)
+        assert completed_keys(out) == {attempt.key for attempt in read_attempts(out)}
+
+    def test_resume_holds_for_ids_as_the_dataset_supplies_them(self, root, tmp_path):
+        from nl2sql_reliability.dataset import Question as RealQuestion
+
+        raw = {
+            "question_id": "77",
+            "question": "How many customers are there?",
+            "evidence": "",
+            "SQL": "SELECT COUNT(*) FROM customer",
+            "db_id": "shop",
+        }
+        loaded = RealQuestion.from_raw(raw)
+        assert isinstance(loaded.question_id, int)
+
+        out = tmp_path / "r.jsonl"
+        good = fenced("SELECT COUNT(*) FROM customer")
+        run_suite([loaded], StubGenerator(replies=[good]), k=2, arm="a", out_path=out, root=root)
+
+        second = StubGenerator(replies=[good])
+        run_suite([loaded], second, k=2, arm="a", out_path=out, root=root)
+        assert not second.calls
+        assert len(read_attempts(out)) == 2

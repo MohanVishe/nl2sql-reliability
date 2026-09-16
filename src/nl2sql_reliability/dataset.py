@@ -53,8 +53,17 @@ class Question:
         missing = [f for f in REQUIRED_FIELDS if f not in raw]
         if missing:
             raise ValueError(f"item missing fields {missing}: {raw!r}")
+        # The source JSON stores ids as strings ("1471"). Left as strings they sort
+        # lexicographically -- "10" before "9" -- and, worse, a results file round-tripped
+        # through JSON compares unequal to the id it came from, which silently breaks the
+        # runner's resume check into re-running work it had already done.
+        try:
+            question_id = int(raw["question_id"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"question_id is not numeric: {raw['question_id']!r}") from exc
+
         return cls(
-            question_id=raw["question_id"],
+            question_id=question_id,
             question=raw["question"],
             evidence=raw["evidence"] or "",
             gold_sql=raw["SQL"],
