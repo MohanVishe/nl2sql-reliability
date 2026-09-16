@@ -62,14 +62,48 @@ The comparison rules, each of which exists because the obvious alternative is wr
 | `1` and `1.0` are equal; strings trimmed | SQLite is loosely typed; representation is not semantics |
 | Queries run **read-only**, with a deadline | Generated SQL is untrusted: one hallucinated `DROP` would corrupt every later run |
 
-Generation and execution are **decoupled** — all SQL is written to disk first and scored
-afterwards — so that a database lock or timeout is never recorded as a model failure. The
-study measures the model, not its own harness.
+Scoring is reported under **both** readings of the "extra columns" rule. The headline is the
+lenient one, and the report prints how many matches depend on that allowance — it is the first
+thing a reader should challenge, so the size of the choice is published rather than defended.
+
+A harness problem must never be recorded as a model failure, so the outcomes are kept distinct:
+generation that failed, a prompt that overran the context window, SQL that did not parse, a
+query that timed out, and a query that ran and returned the wrong rows are five different
+things in the results file, not one. Every attempt stores its raw reply and extracted SQL, so
+the whole study can be re-scored from disk without generating anything again.
+
+## How a run works
+
+Each question is asked **k times on a byte-identical prompt**, and every attempt is appended to
+JSONL as it completes. Three properties matter:
+
+- **Resumable.** A full arm is thousands of generations over several hours. Completed
+  `(arm, question_id, run)` keys are skipped on restart, so a crash costs minutes, not the run.
+- **Ordered by database.** Consecutive questions on one database share a byte-identical prompt
+  prefix, which is what a provider's prompt cache keys on — measured at a 69% token saving.
+  Attempts are independent draws at temperature > 0, so ordering cannot bias the sample.
+- **Gold executed once** per question, not once per repetition. A question whose reference
+  query does not run is flagged and excluded, never counted against the model.
+
+Temperature 0 is refused by the runner: every repetition would be near-identical, and the
+reported gap would describe the decoder rather than the model.
+
+```bash
+uv run python scripts/fetch_databases.py            # 330 MB, one time
+uv run python scripts/run_arm.py --arm local-7b --k 10
+uv run python scripts/report.py
+```
 
 ## Status
 
-Under active development. The dataset loader, execution layer and result comparator are
-complete and tested; model arms and the run harness are next.
+Under active development. The full pipeline — dataset, schema rendering, prompt building,
+generation, execution, scoring, and the resumable k-repetition harness — is complete and
+tested end to end against the real BIRD databases. Arms are being run now; no results are
+published yet.
+
+Measured on the reference machine (Ryzen 5 3600, 16 GB, RTX 3070 8 GB) with
+Qwen2.5-Coder-7B at Q4: **~3.3 s per attempt, 22–32 tok/s, 5.8 GB of VRAM**, which puts one
+498-question arm at k=10 at roughly five hours.
 
 ## Install
 
@@ -90,8 +124,18 @@ uv run pytest -m "not network"
 ```
 src/nl2sql_reliability/
   dataset.py   # fetch and load Arcwise-Plat-SQL; stratified subsets
+  db.py        # locate BIRD databases; render schemas as DDL
+  prompt.py    # cacheable prefix + question suffix; SQL extraction from replies
+  generate.py  # model access (Ollama today); truncation reported, not swallowed
   execute.py   # read-only, deadline-bounded SQLite execution
   compare.py   # result-set equivalence
+  metrics.py   # unbiased pass@k and pass^k estimators
+  runner.py    # k repetitions, scoring, resumable JSONL output
+scripts/
+  fetch_databases.py  # download the BIRD dev databases
+  schema_report.py    # measure the token budget a run will cost
+  run_arm.py          # run one configuration
+  report.py           # turn recorded attempts into the tables
 tests/         # known-equivalent and known-different cases for each
 ```
 
