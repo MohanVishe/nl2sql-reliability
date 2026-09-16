@@ -9,6 +9,10 @@ do I get a correct answer every time?*
 
 This repository measures that gap.
 
+**New to the problem?** [docs/EXPLAINED.md](docs/EXPLAINED.md) explains the whole study in
+plain language, including a real case where the model contradicted itself across ten
+identical prompts by a single character.
+
 ---
 
 ## The question
