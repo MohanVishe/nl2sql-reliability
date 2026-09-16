@@ -33,7 +33,7 @@ jobs:
       - name: Format check
         run: uv run ruff format --check .
 
-      # Network tests are excluded: CI must not fail because an upstream dataset host is
-      # briefly unreachable. The dataset-shape check runs locally instead.
+      # Network and database tests are excluded: CI must not fail because an upstream host is
+      # briefly unreachable, and the 330 MB BIRD archive is not fetched in CI. Both run locally.
       - name: Test
-        run: uv run pytest -m "not network"
+        run: uv run pytest -m "not network and not databases"

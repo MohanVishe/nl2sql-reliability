@@ -26,7 +26,10 @@ packages = ["src/nl2sql_reliability"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
-markers = ["network: requires internet access"]
+markers = [
+    "network: requires internet access",
+    "databases: requires the BIRD dev databases in data/",
+]
 
 [tool.ruff]
 line-length = 100
