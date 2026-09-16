@@ -12,8 +12,10 @@ build/
 # and the BIRD databases are large. See src/nl2sql_reliability/dataset.py
 data/
 
-# Raw run outputs are committed deliberately (see README), but not scratch runs
+# Raw run outputs are committed deliberately (see README), but not scratch runs:
+# pilots exist to prove the harness works, not to support any claim in the write-up.
 results/scratch/
+results/pilot*.jsonl
 
 .env
 .DS_Store
