@@ -17,5 +17,11 @@ data/
 results/scratch/
 results/pilot*.jsonl
 
+# In-progress arms are ignored and committed only once complete. A partial results file
+# is indistinguishable from a finished one to anyone who clones mid-run, and the numbers
+# it supports would be wrong.
+results/*.jsonl
+!results/final/*.jsonl
+
 .env
 .DS_Store
