@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# Datasets are fetched, never vendored: Arcwise-Plat-SQL is CC BY-SA 4.0
+# and the BIRD databases are large. See src/nl2sql_reliability/dataset.py
+data/
+
+# Raw run outputs are committed deliberately (see README), but not scratch runs
+results/scratch/
+
+.env
+.DS_Store

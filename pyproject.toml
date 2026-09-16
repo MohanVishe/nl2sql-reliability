@@ -1,0 +1,36 @@
+[project]
+name = "nl2sql-reliability"
+version = "0.1.0"
+description = "Measuring run-to-run reliability of NL2SQL agents, not just peak accuracy"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Mohan Prakash Vishe" }]
+keywords = ["nl2sql", "text-to-sql", "evaluation", "reliability", "benchmark", "llm"]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.urls]
+Repository = "https://github.com/MohanVishe/nl2sql-reliability"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nl2sql_reliability"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+markers = ["network: requires internet access"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
