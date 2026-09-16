@@ -88,6 +88,29 @@ def print_failures(name: str, attempts: list[Attempt]) -> None:
     print()
 
 
+def print_strictness(name: str, attempts: list[Attempt]) -> None:
+    """How much of the score rests on accepting extra projected columns.
+
+    Execution accuracy has to decide whether a query that answers the question and also
+    returns the column it grouped by counts as correct. This prints the size of that
+    decision instead of leaving a reader to wonder which way it went.
+    """
+    scoreable = [a for a in attempts if not a.gold_failed]
+    if not scoreable:
+        return
+    lenient = sum(a.match for a in scoreable)
+    strict = sum(a.match_strict for a in scoreable)
+    if not lenient:
+        return
+
+    print(f"== {name}: effect of accepting extra columns")
+    print(f"   lenient matches         {lenient:>6} {lenient / len(scoreable):>7.1%}")
+    print(f"   strict matches          {strict:>6} {strict / len(scoreable):>7.1%}")
+    share = (lenient - strict) / lenient
+    print(f"   accepted on leniency    {lenient - strict:>6} {share:>7.1%} of matches")
+    print()
+
+
 def print_flakiest(name: str, attempts: list[Attempt], limit: int) -> None:
     """Questions the model got right sometimes and wrong other times.
 
@@ -182,6 +205,7 @@ def main() -> int:
     for name, group in sorted(arms(attempts).items()):
         print_sweep(name, group, args.k)
         print_failures(name, group)
+        print_strictness(name, group)
         print_flakiest(name, group, args.flaky)
         print_cost(name, group)
         if args.by_database:

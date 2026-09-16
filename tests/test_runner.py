@@ -412,3 +412,80 @@ class TestResumeKeyRoundTrip:
         run_suite([loaded], second, k=2, arm="a", out_path=out, root=root)
         assert not second.calls
         assert len(read_attempts(out)) == 2
+
+
+class TestStrictAndLenientScoring:
+    """Both verdicts are recorded, so the write-up can state what the choice is worth.
+
+    Execution accuracy has to decide whether a prediction that answers the question *and*
+    returns an extra column counts. Either answer is defensible; picking one silently is not,
+    because it is the first thing a reader will challenge.
+    """
+
+    def test_an_exact_answer_satisfies_both(self, root, question):
+        generator = StubGenerator(replies=[fenced("SELECT COUNT(*) FROM customer")])
+        attempt = Runner(generator, arm="test", root=root).attempt(question)
+        assert attempt.match
+        assert attempt.match_strict
+
+    def test_an_extra_column_is_lenient_only(self, root):
+        question = Question(
+            question_id=1,
+            question="Which cities are there?",
+            evidence="",
+            gold_sql="SELECT city FROM customer ORDER BY city",
+            db_id="shop",
+        )
+        # Answers the question, and also returns the name it was selected alongside.
+        generator = StubGenerator(replies=[fenced("SELECT city, name FROM customer ORDER BY city")])
+        attempt = Runner(generator, arm="test", root=root).attempt(question)
+        assert attempt.match
+        assert not attempt.match_strict
+
+    def test_a_wrong_answer_fails_both(self, root, question):
+        generator = StubGenerator(replies=[fenced("SELECT 99")])
+        attempt = Runner(generator, arm="test", root=root).attempt(question)
+        assert not attempt.match
+        assert not attempt.match_strict
+
+    def test_sql_that_does_not_run_fails_both(self, root, question):
+        generator = StubGenerator(replies=[fenced("SELECT * FROM missing_table")])
+        attempt = Runner(generator, arm="test", root=root).attempt(question)
+        assert not attempt.match
+        assert not attempt.match_strict
+
+    def test_strict_is_never_looser_than_lenient(self, root):
+        # The invariant the short-circuit in the runner depends on.
+        question = Question(
+            question_id=1,
+            question="Which cities are there?",
+            evidence="",
+            gold_sql="SELECT city FROM customer ORDER BY city",
+            db_id="shop",
+        )
+        for reply in (
+            "SELECT city FROM customer ORDER BY city",
+            "SELECT city, name FROM customer ORDER BY city",
+            "SELECT name FROM customer ORDER BY city",
+            "SELECT 1",
+        ):
+            attempt = Runner(StubGenerator(replies=[fenced(reply)]), arm="test", root=root).attempt(
+                question
+            )
+            assert attempt.match or not attempt.match_strict
+
+    def test_outcomes_can_be_scored_either_way(self):
+        attempts = [
+            Attempt(
+                arm="a",
+                question_id=1,
+                db_id="d",
+                run=r,
+                match=True,
+                match_strict=(r == 0),
+                reason="",
+            )
+            for r in range(4)
+        ]
+        assert outcomes(attempts)[0].correct == 4
+        assert outcomes(attempts, strict=True)[0].correct == 1

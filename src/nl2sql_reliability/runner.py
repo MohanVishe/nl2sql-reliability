@@ -50,6 +50,11 @@ class Attempt:
     run: int
     match: bool
     reason: str
+    # The same comparison with extra projected columns disallowed. Recorded alongside
+    # rather than chosen between: leniency is the single most obvious thing to challenge
+    # in an execution-accuracy result, and a study that reports only one of the two
+    # invites the reader to assume the other would have been worse.
+    match_strict: bool = False
     sql: str = ""
     raw: str = ""
     turns: int = 1
@@ -166,13 +171,23 @@ class Runner:
         if not execution.ok:
             reason = "query timed out" if execution.timed_out else "query failed to execute"
             comparison_match, comparison_reason = False, reason
+            comparison_strict = False
         else:
             comparison = compare_result_sets(gold.rows, execution.rows, ordered=ordered)
             comparison_match, comparison_reason = comparison.match, comparison.reason
+            # Strict acceptance is a subset of lenient, so a lenient miss is a strict miss
+            # and the second comparison can be skipped.
+            comparison_strict = (
+                comparison_match
+                and compare_result_sets(
+                    gold.rows, execution.rows, ordered=ordered, allow_extra_columns=False
+                ).match
+            )
 
         return Attempt(
             **base,
             match=comparison_match,
+            match_strict=comparison_strict,
             reason=comparison_reason,
             sql=sql,
             raw=raw if self.keep_raw else "",
@@ -244,8 +259,11 @@ def read_attempts(path: Path | str, arm: str | None = None) -> list[Attempt]:
     return attempts
 
 
-def outcomes(attempts: Iterable[Attempt]) -> list[Outcome]:
+def outcomes(attempts: Iterable[Attempt], *, strict: bool = False) -> list[Outcome]:
     """Collapse attempts into per-question (attempts, correct) pairs for the estimators.
+
+    `strict` scores against the stricter comparison, which rejects a prediction that
+    projects extra columns.
 
     Questions whose gold query failed are dropped: an unscoreable question would otherwise
     count as a model failure and depress both figures by the same amount, which is precisely
@@ -257,7 +275,7 @@ def outcomes(attempts: Iterable[Attempt]) -> list[Outcome]:
             continue
         counts = tally.setdefault(attempt.question_id, [0, 0])
         counts[0] += 1
-        counts[1] += int(attempt.match)
+        counts[1] += int(attempt.match_strict if strict else attempt.match)
     return [
         Outcome(
             question_id=question_id, attempts=tally[question_id][0], correct=tally[question_id][1]
