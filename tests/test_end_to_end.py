@@ -97,23 +97,25 @@ class TestGoldQueriesExecute:
         )
 
 
+@pytest.fixture(scope="module")
+def scored(questions):
+    """A question whose gold query returns several rows, with its result set.
+
+    Several rows, not merely one: a single-row result cannot demonstrate that row order is
+    handled or that a truncated answer is rejected, which are two of the cases most likely
+    to be scored wrongly.
+    """
+    for question in questions:
+        path = find_database(question.db_id, DATA)
+        result = run_query(path, question.gold_sql)
+        if result.ok and len(result.rows) >= 2:
+            return question, path, result
+    pytest.skip("no question produced a multi-row gold result set")
+
+
 @skip_without_databases
 class TestScoringOnRealData:
     """The path a real run takes: execute gold, execute candidate, compare."""
-
-    @pytest.fixture(scope="class")
-    def scored(self, questions):
-        """First question whose gold query returns a non-empty result set.
-
-        An empty result set cannot distinguish a correct query from one that filters
-        everything away, so it is a poor subject for a scoring demonstration.
-        """
-        for question in questions:
-            path = find_database(question.db_id, DATA)
-            result = run_query(path, question.gold_sql)
-            if result.ok and result.rows:
-                return question, path, result
-        pytest.skip("no question produced a non-empty gold result set")
 
     def test_gold_scores_as_correct(self, scored):
         question, _, gold = scored
@@ -121,9 +123,9 @@ class TestScoringOnRealData:
 
     def test_deliberately_wrong_query_scores_as_wrong(self, scored):
         question, path, gold = scored
-        # A query that is valid SQL against the same schema but answers a different
-        # question. This is the case that matters: invalid SQL is easy to catch, whereas
-        # plausible-but-wrong SQL is what a model actually produces.
+        # Valid SQL against the same database, answering a different question. This is the
+        # case that matters: invalid SQL is trivially caught, whereas plausible-but-wrong
+        # SQL is what a model actually produces.
         wrong = run_query(path, "SELECT 1")
         assert wrong.ok
         assert not compare_result_sets(
@@ -140,14 +142,18 @@ class TestScoringOnRealData:
 
     def test_truncated_result_scores_as_wrong(self, scored):
         question, _, gold = scored
-        if len(gold.rows) < 2:
-            pytest.skip("needs at least two rows to truncate")
         assert not compare_result_sets(
             gold.rows, gold.rows[:-1], ordered=order_matters(question.gold_sql)
         )
 
-    def test_reordered_rows_still_score_as_correct_when_unordered(self, scored):
+    def test_duplicated_row_scores_as_wrong(self, scored):
         question, _, gold = scored
-        if order_matters(question.gold_sql) or len(gold.rows) < 2:
-            pytest.skip("needs an unordered query with at least two rows")
+        assert not compare_result_sets(
+            gold.rows, gold.rows + gold.rows[:1], ordered=order_matters(question.gold_sql)
+        )
+
+    def test_reordered_rows_score_as_correct_when_gold_is_unordered(self, scored):
+        question, _, gold = scored
+        if order_matters(question.gold_sql):
+            pytest.skip("gold query pins row order")
         assert compare_result_sets(gold.rows, list(reversed(gold.rows)))
