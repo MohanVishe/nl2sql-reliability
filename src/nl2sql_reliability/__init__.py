@@ -17,6 +17,7 @@ from nl2sql_reliability.metrics import (
     summarize,
     sweep,
 )
+from nl2sql_reliability.prompt import Prompt, build, build_for, extract_sql, repair
 
 __version__ = "0.1.0"
 
@@ -24,14 +25,19 @@ __all__ = [
     "Comparison",
     "Execution",
     "Outcome",
+    "Prompt",
     "Question",
     "SuiteResult",
+    "build",
+    "build_for",
     "compare_result_sets",
     "databases",
+    "extract_sql",
     "load",
     "order_matters",
     "pass_at_k",
     "pass_hat_k",
+    "repair",
     "run_query",
     "stratified_subset",
     "summarize",
