@@ -100,35 +100,50 @@ uv run python scripts/report.py
 
 ## Status
 
-**Setup A is complete: 4,980 attempts, 498 questions, k=10.** Qwen2.5-Coder-7B at Q4,
-single-shot, temperature 0.2, 4.12 hours of local generation.
+**Two arms complete: 9,960 attempts over 498 questions, k=10 each.** Qwen2.5-Coder-7B at Q4,
+temperature 0.2, 9.4 hours of local generation.
 
-| k | pass@k | pass^k | gap |
-|---|---|---|---|
-| 1 | 42.9% | 42.9% | 0.0 |
-| 5 | 48.2% | 37.7% | 10.6 |
-| **10** | **49.8%** | **36.1%** | **13.7** |
+| arm | k | pass@k | pass^k | gap |
+|---|---|---|---|---|
+| A — single-shot | 1 | 42.9% | 42.9% | 0.0 |
+| A — single-shot | 5 | 48.2% | 37.7% | 10.6 |
+| **A — single-shot** | **10** | **49.8%** | **36.1%** | **13.7** |
+| B — retry on error | 1 | 46.4% | 46.4% | 0.0 |
+| B — retry on error | 5 | 52.2% | 40.9% | 11.3 |
+| **B — retry on error** | **10** | **54.2%** | **39.5%** | **14.7** |
 
 More than a quarter of the model's apparent capability does not survive repetition. The failure
-breakdown matters more than the headline: of 4,960 scoreable attempts, 15.9% produced SQL that
-would not run, and **40.9% produced SQL that ran cleanly and returned the wrong rows** — no
-error, nothing for a pipeline to catch.
+breakdown matters more than the headline: in arm A, 15.9% of attempts produced SQL that would
+not run, and **40.9% produced SQL that ran cleanly and returned the wrong rows** — no error,
+nothing for a pipeline to catch.
 
-Leniency does not explain it: only 2.5% of matches depend on accepting an extra projected column.
-Per-database the gap ranges from 22.7 points to zero, so reliability is not a fixed property of
-the model.
+**Letting the model see its own error and retry moved both numbers up — and the gap up with
+them.** Arm B gains +4.4 points of pass@k and +3.4 of pass^k (95% CIs [+2.4, +6.7] and
+[+1.0, +5.8], paired bootstrap over questions), at 1.28× the time. But the distance between the
+two metrics widens from 13.7 to 14.7 points, and the share of inconsistent questions rises from
+13.7% to 14.7%. Self-correction converts hard failures into answers that are *sometimes* right:
+a gain on the leaderboard metric, a loss on the one that decides whether you can leave it
+running.
+
+The loop is also narrower than it looks. Retries fire on execution errors only, so an attempt
+that runs cleanly and returns wrong rows offers nothing to react to. Of the misses it was in a
+position to fix, it fixed **5.0%**.
+
+Leniency does not explain any of it: 2.5% (A) and 3.2% (B) of matches depend on accepting an
+extra projected column. Per-database the gap ranges from 22.7 points to zero, so reliability is
+not a fixed property of the model.
 
 Two questions are excluded throughout because their reference SQL does not execute; 496 are
 scored, not 498.
 
-Raw per-attempt output: [`results/final/local-7b-single.jsonl`](results/final/local-7b-single.jsonl).
-Full reasoning and results in [docs/EXPLAINED.md](docs/EXPLAINED.md); exact configuration for
-every arm in [docs/RUN-LOG.md](docs/RUN-LOG.md).
+Raw per-attempt output: [`results/final/`](results/final/). Full reasoning and results in
+[docs/EXPLAINED.md](docs/EXPLAINED.md); exact configuration for every arm in
+[docs/RUN-LOG.md](docs/RUN-LOG.md).
 
-The agentic arm (B) is running; the 3B arm (C) is queued.
+The 3B arm (C) is running.
 
-Measured on the reference machine (Ryzen 5 3600, 16 GB, RTX 3070 8 GB): 3.0 s per attempt,
-20.3 tok/s, 5.8 GB of VRAM.
+Measured on the reference machine (Ryzen 5 3600, 16 GB, RTX 3070 8 GB): 3.0 s per attempt
+single-shot and 3.8 s with retries, ~21 tok/s, under 6 GB of VRAM.
 
 ## Install
 
@@ -161,6 +176,7 @@ scripts/
   schema_report.py    # measure the token budget a run will cost
   run_arm.py          # run one configuration
   report.py           # turn recorded attempts into the tables
+  compare_arms.py     # arms against each other, on the questions they share
 tests/         # known-equivalent and known-different cases for each
 ```
 
