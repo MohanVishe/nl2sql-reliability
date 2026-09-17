@@ -156,6 +156,37 @@ def print_by_database(name: str, attempts: list[Attempt], k: int) -> None:
     print()
 
 
+def print_retries(name: str, attempts: list[Attempt]) -> None:
+    """What the retry loop actually recovered, for arms that have one.
+
+    Retries fire on execution failure only, so self-correction can reach no more of the
+    failures than the share that error out. An attempt that runs cleanly and returns the
+    wrong rows raises no error, offers the loop nothing to react to, and is untouchable
+    however many turns are allowed. This prints that ceiling next to what was recovered
+    under it, because an arm can look better overall while the loop itself did very little.
+    """
+    scoreable = [a for a in attempts if not a.gold_failed and a.generated]
+    retried = [a for a in scoreable if a.turns > 1]
+    if not scoreable or not retried:
+        return
+
+    recovered = sum(1 for a in retried if a.executed)
+    correct = sum(1 for a in retried if a.match)
+    # Every retried attempt had a failing first turn, so without the loop it would have been
+    # a miss. Adding the ones it rescued back to the observed misses reconstructs what this
+    # arm would have scored single-shot, without needing the other arm to say so.
+    would_have_missed = sum(1 for a in scoreable if not a.match) + correct
+
+    print(f"== {name}: what retrying recovered")
+    print(f"   attempts that retried   {len(retried):>6} {len(retried) / len(scoreable):>7.1%}")
+    print(f"   ...ended up executing   {recovered:>6} {recovered / len(retried):>7.1%} of those")
+    print(f"   ...ended up correct     {correct:>6} {correct / len(retried):>7.1%} of those")
+    if would_have_missed:
+        share = correct / would_have_missed
+        print(f"   of the misses it could have fixed, it fixed {share:>6.1%}")
+    print()
+
+
 def print_cost(name: str, attempts: list[Attempt]) -> None:
     generated = [a for a in attempts if a.generated and not a.gold_failed]
     if not generated:
@@ -207,6 +238,7 @@ def main() -> int:
         print_failures(name, group)
         print_strictness(name, group)
         print_flakiest(name, group, args.flaky)
+        print_retries(name, group)
         print_cost(name, group)
         if args.by_database:
             scored = outcomes(group)
