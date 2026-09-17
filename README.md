@@ -100,14 +100,34 @@ uv run python scripts/report.py
 
 ## Status
 
-Under active development. The full pipeline — dataset, schema rendering, prompt building,
-generation, execution, scoring, and the resumable k-repetition harness — is complete and
-tested end to end against the real BIRD databases. Arms are being run now; no results are
-published yet.
+**Setup A is complete: 4,980 attempts, 498 questions, k=10.** Qwen2.5-Coder-7B at Q4,
+single-shot, temperature 0.2, 4.12 hours of local generation.
 
-Measured on the reference machine (Ryzen 5 3600, 16 GB, RTX 3070 8 GB) with
-Qwen2.5-Coder-7B at Q4: **~3.3 s per attempt, 22–32 tok/s, 5.8 GB of VRAM**, which puts one
-498-question arm at k=10 at roughly five hours.
+| k | pass@k | pass^k | gap |
+|---|---|---|---|
+| 1 | 42.9% | 42.9% | 0.0 |
+| 5 | 48.2% | 37.7% | 10.6 |
+| **10** | **49.8%** | **36.1%** | **13.7** |
+
+More than a quarter of the model's apparent capability does not survive repetition. The failure
+breakdown matters more than the headline: of 4,960 scoreable attempts, 15.9% produced SQL that
+would not run, and **40.9% produced SQL that ran cleanly and returned the wrong rows** — no
+error, nothing for a pipeline to catch.
+
+Leniency does not explain it: only 2.5% of matches depend on accepting an extra projected column.
+Per-database the gap ranges from 22.7 points to zero, so reliability is not a fixed property of
+the model.
+
+Two questions are excluded throughout because their reference SQL does not execute; 496 are
+scored, not 498.
+
+Raw per-attempt output: [`results/final/local-7b-single.jsonl`](results/final/local-7b-single.jsonl).
+Full reasoning and results in [docs/EXPLAINED.md](docs/EXPLAINED.md).
+
+The agentic arm (B) is running; the 3B arm (C) is queued.
+
+Measured on the reference machine (Ryzen 5 3600, 16 GB, RTX 3070 8 GB): 3.0 s per attempt,
+20.3 tok/s, 5.8 GB of VRAM.
 
 ## Install
 
