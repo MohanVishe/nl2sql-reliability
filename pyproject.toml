@@ -24,7 +24,7 @@ packages = ["src/nl2sql_reliability"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "scripts"]
 addopts = "-q"
 markers = [
     "network: requires internet access",
