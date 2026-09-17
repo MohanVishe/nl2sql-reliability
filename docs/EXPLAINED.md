@@ -36,9 +36,10 @@ production.
 quarter of its apparent ability does not survive repetition. And the failures are mostly silent
 — queries that run perfectly and return the wrong data.
 
-**And the fix everyone reaches for doesn't fix it.** Letting the model read its own error and
-retry — an "AI agent" — raised both numbers but widened the gap between them, because it mostly
-converts always-wrong questions into sometimes-right ones.
+**Neither obvious fix closed that gap — both widened it.** Letting the model read its own
+error and retry (an "AI agent") raised both numbers but widened the distance between them.
+Halving the model's size cost 7.5 points of capability and **17.3 points of reliability** —
+more than twice as much.
 
 **The goal.** Produce a number the field does not currently publish, with the raw evidence
 attached so anyone can check it.
@@ -252,8 +253,9 @@ noise as model unreliability. So we run both queries and compare what comes back
 
 ## 8. What we found
 
-**Setups A and B are complete: 9,960 attempts, 498 questions, 10 repetitions each, 9.4 hours of
-computation.** Model: Qwen2.5-Coder-7B, compressed to 4-bit, running locally.
+**All three setups are complete: 14,940 attempts, 498 questions, 10 repetitions each, 13.4
+hours of computation.** Models: Qwen2.5-Coder at 7B and 3B, compressed to 4-bit, running
+locally.
 
 ### The headline
 
@@ -394,6 +396,63 @@ that announce themselves. In this study those were the minority — and the sile
 which are the ones that actually hurt, went *up* (40.9% → 45.2% of attempts), because queries
 that used to crash now run and return something wrong instead.
 
+### Setup C: does a bigger model buy reliability?
+
+Same family, same questions, same single-shot setup — half the parameters. Qwen2.5-Coder-3B
+instead of 7B. Because both models come from the same family, this isolates *size* rather than
+confounding it with different training data.
+
+| | A: the 7B | C: the 3B | change |
+|---|---|---|---|
+| pass@10 (capability) | 49.8% | 42.3% | **−7.5** |
+| pass^10 (reliability) | 36.1% | 18.8% | **−17.3** |
+| **the gap** | **13.7** | **23.6** | **+9.9** |
+| questions it's inconsistent on | 13.7% | 23.6% | +9.9 |
+| time per attempt | 3.0 s | 2.9 s | 0.96× |
+
+**Reliability falls more than twice as fast as capability.** Shrink the model and you lose 7.5
+points of "can it do this at all" — but 17.3 points of "does it do this every time."
+
+This is the clearest result in the study, because of what it implies about how models are
+normally compared. A leaderboard asks each question once, so it measures something close to the
+first row. On that row these two models look 13 points apart, which sounds like a reasonable
+trade for half the size. On the row that decides whether you can leave it running unattended,
+they are **17 points apart, and the small one keeps barely half the reliability of the large
+one**. The usual way of comparing models understates the real difference by more than double.
+
+Question by question: the 3B was *more* reliable on 16 questions and *less* reliable on 102.
+
+And it is **not faster**. 2.9 seconds per attempt against the 7B's 3.0 — a 3% difference, well
+inside noise. At this size, the fixed overhead of each request dominates the time spent actually
+generating, so the smaller model buys about 1.3 GB of video memory and nothing else. If you
+picked it for speed on a setup like this one, you would be paying 17 points of reliability for
+a speedup you cannot measure.
+
+One more detail worth seeing. Remember `debit_card_specializing` from the per-database table
+above — the single database where the 7B was perfectly consistent, gap 0.0? On the 3B it opens
+to **16.7 points**. Consistency that looked like a property of the task turned out to be a
+property of the model doing it.
+
+### All three, side by side
+
+| | A: 7B, one shot | B: 7B, retry | C: 3B, one shot |
+|---|---|---|---|
+| pass@10 — *can* it? | 49.8% | 54.2% | 42.3% |
+| pass^10 — *always*? | 36.1% | 39.5% | 18.8% |
+| **the gap** | **13.7** | **14.7** | **23.6** |
+| ran fine, wrong rows | 40.9% | 45.2% | 32.8% |
+| wouldn't execute | 15.9% | 8.0% | 37.3% |
+| seconds per attempt | 3.0 | 3.8 | 2.9 |
+
+**Neither thing we tried closed the gap. Both widened it.** Adding a retry loop widened it a
+little; halving the model widened it a lot. In both cases the capability number moved in the
+direction you'd expect and the reliability number moved *less*, or much worse.
+
+That is the study's actual finding, and it is not the one we set out expecting. The gap between
+what a model can do and what it does dependably is not an artefact that better engineering
+sweeps away. It is a property of the thing, and the only way to know its size for your model on
+your database is to measure it — which is the one thing a single-run benchmark cannot do.
+
 ---
 
 ## 9. How we know the numbers are right
@@ -442,7 +501,7 @@ harder than others.
 **Check 5 — 248 automated tests**, run against Python 3.11, 3.12 and 3.13 on every change,
 including tests against the real databases.
 
-**Check 6 — everything is published.** All 9,960 raw attempts are in the repository: every reply,
+**Check 6 — everything is published.** All 14,940 raw attempts are in the repository: every reply,
 every extracted query, both verdicts, timings, token counts. Every number above can be
 recomputed without running a model.
 
@@ -480,11 +539,17 @@ you tested, they worked.
 **What follows from that:**
 
 1. **A single benchmark run tells you the wrong thing.** Test your questions repeatedly or you're
-   measuring luck.
+   measuring luck. Every intervention in this study looked better on a single-run metric than it
+   did on repetition — the 3B by more than double.
 2. **Error handling is not enough.** Most failures here never raise an error. Catching exceptions
-   catches 16% of the problem.
-3. **Measure on your own database.** The gap varied from 0 to 22.7 points across schemas.
-4. **The safe questions are genuinely safe.** 36% consistently correct is a real, usable
+   catches 16% of the problem, and an agent loop built on those exceptions fixed 5% of the
+   misses it could reach.
+3. **Measure on your own database.** The gap varied from 0 to 31.4 points across schemas, and a
+   database that looked perfectly consistent on one model came apart on another.
+4. **Don't buy a smaller model on its benchmark score.** The 3B gave up 7.5 points of capability
+   and 17.3 of reliability — and, on this hardware, was not faster. Whatever you are trading
+   size for, check that you are actually getting it.
+5. **The safe questions are genuinely safe.** 36% consistently correct is a real, usable
    capability — it just needs to be identified by repetition rather than assumed from a headline
    number.
 
@@ -537,22 +602,24 @@ Worth stating, because "it worked first time" is rarely true and usually means n
 Everything runs on one desktop (Ryzen 5 3600, 16 GB RAM, RTX 3070 with 8 GB of video memory).
 Measured at about 21 tokens per second and under 6 GB of video memory:
 
-| | Setup A | Setup B |
-|---|---|---|
-| Seconds per attempt | 3.0 | 3.8 |
-| Total generation time | 4.12 h | 5.28 h |
-| Input tokens | 4.0 M | 5.3 M |
-| Output tokens | 0.30 M | 0.40 M |
+| | Setup A | Setup B | Setup C |
+|---|---|---|---|
+| Seconds per attempt | 3.0 | 3.8 | 2.9 |
+| Total generation time | 4.12 h | 5.28 h | 3.95 h |
+| Input tokens | 4.0 M | 5.3 M | 4.0 M |
+| Output tokens | 0.30 M | 0.40 M | 0.31 M |
 
-Setup B costs 28% more time and 32% more input tokens for its 4.4 points of capability — a
-tradeoff worth knowing about before building a retry loop into a product.
+Setup B costs 28% more time and 32% more input tokens for its 4.4 points of capability. Setup C,
+the smaller model, costs essentially the same as A — a tradeoff worth checking before assuming a
+retry loop or a smaller model is the cheap option.
 
 That token count is the point. **On a typical free API tier, Setup A alone would take about
 eight days** — and that's why nobody publishes this number. Reliability only becomes visible
 through repetition, and repetition is exactly what a metered API makes expensive. Running
 locally removes the quota, which is why k can be 10 here instead of the 2 or 3 a free tier
-allows. Look again at §8: at k=2 the gap reads 5.1 points; at k=10 it reads 13.7. A budget-
-constrained study would have found a third of the real effect.
+allows. Look again at §8: at k=2 the gap reads 5.1 points; at k=10 it reads 13.7. For the 3B it
+is 8.1 at k=2 against 23.6 at k=10. A budget-constrained study would have found roughly a third
+of the real effect in both cases.
 
 It also means anyone can reproduce this, which is the difference between a result and a claim.
 
@@ -564,7 +631,7 @@ It also means anyone can reproduce this, which is the difference between a resul
 |---|---|
 | **A** — 7B, single attempt | ✅ Complete. 4,980 attempts published. |
 | **B** — 7B, self-correcting | ✅ Complete. 4,980 attempts published. |
-| **C** — 3B, single attempt | 🔄 Running |
+| **C** — 3B, single attempt | ✅ Complete. 4,980 attempts published. |
 
 248 tests passing. Continuous integration green on Python 3.11, 3.12 and 3.13.
 
