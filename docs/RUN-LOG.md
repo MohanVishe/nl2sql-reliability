@@ -182,7 +182,80 @@ confounding it with different training data or tokenizer.
 | Max turns | 1 |
 | Attempts | 4,980 (498 × 10) |
 | Started | 2026-09-17 18:33 UTC |
-| Status | **running** |
+| Finished | 2026-09-18 03:14 UTC |
+| Generation time | 3.95 h |
+| Wall clock | spread over ~8.7 h; interrupted once and resumed |
+| Throughput | 21.8 tok/s, 2.9 s per attempt |
+| VRAM | 4.5 GB |
+| Prompt tokens | 3,994,960 |
+| Completion tokens | 310,581 |
+| Raw output | [`results/final/local-3b-single.jsonl`](../results/final/local-3b-single.jsonl) (4.1 MB) |
+
+### Result
+
+| k | pass@k | pass^k | gap |
+|---|---|---|---|
+| 1 | 29.7% | 29.7% | 0.0 |
+| 2 | 33.8% | 25.6% | 8.1 |
+| 5 | 38.7% | 21.6% | 17.1 |
+| 10 | 42.3% | 18.8% | 23.6 |
+
+Outcome of 4,960 scoreable attempts:
+
+| | count | share |
+|---|---|---|
+| SQL did not execute | 1,849 | 37.3% |
+| ran, wrong rows | 1,628 | 32.8% |
+| correct | 1,473 | 29.7% |
+| query timed out | 10 | 0.2% |
+
+Strict scoring: 1,429 matches (28.8%). 3.0% of matches depend on accepting extra columns.
+
+117 of 496 questions (23.6%) were answered correctly some of the time but not always.
+
+### Against arm A
+
+Same family, same questions, half the parameters. k=10, 496 questions.
+
+| | arm A (7B) | arm C (3B) | difference | 95% CI |
+|---|---|---|---|---|
+| pass@k | 49.8% | 42.3% | −7.5 | [−11.7, −3.2] |
+| pass^k | 36.1% | 18.8% | **−17.3** | [−21.4, −13.3] |
+| gap | 13.7 | 23.6 | +9.9 | |
+| inconsistent questions | 13.7% | 23.6% | +9.9 | |
+
+Reliability worsened on 102 questions and improved on 16.
+
+**Reliability falls more than twice as fast as capability.** A single-run benchmark, which
+measures something close to pass@1, would have reported the two models 13 points apart; on
+all-of-ten agreement they are 17 points apart, and the smaller model keeps barely half the
+reliability of the larger.
+
+### By database
+
+| Database | pass@10 | pass^10 | gap |
+|---|---|---|---|
+| card_games | 49.0% | 17.6% | 31.4 |
+| student_club | 72.9% | 41.7% | 31.2 |
+| european_football_2 | 49.0% | 19.6% | 29.4 |
+| codebase_community | 50.0% | 22.9% | 27.1 |
+| superhero | 61.5% | 34.6% | 26.9 |
+| formula_1 | 37.9% | 12.1% | 25.8 |
+| financial | 23.3% | 3.3% | 20.0 |
+| debit_card_specializing | 40.0% | 23.3% | 16.7 |
+| toxicology | 27.5% | 12.5% | 15.0 |
+| thrombosis_prediction | 20.0% | 6.0% | 14.0 |
+| california_schools | 13.3% | 3.3% | 10.0 |
+
+Every database is worse than its 7B counterpart, and `debit_card_specializing` — the one
+database where the 7B was perfectly consistent, gap 0.0 — opens to 16.7 points.
+
+### Notes
+
+The 3B is **not faster** on this hardware: 2.9 s per attempt against the 7B's 3.0, and 21.8
+tok/s against 20.3. Per-request overhead dominates at this size, so the smaller model buys
+about 1.3 GB of VRAM and nothing else. Anyone choosing it for latency on a single-stream
+desktop workload would be paying 17 points of reliability for a 3% speedup.
 
 ---
 
