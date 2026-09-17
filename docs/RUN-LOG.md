@@ -101,14 +101,73 @@ failure only; the model never sees the expected rows.
 | Model | `qwen2.5-coder:7b` (Q4_K_M, 4.7 GB) |
 | Max turns | 3 |
 | Attempts | 4,980 (498 × 10) |
-| Started | 2026-09-17 |
-| Status | **running** |
+| Started | 2026-09-17 09:12 UTC |
+| Finished | 2026-09-17 18:31 UTC |
+| Generation time | 5.28 h |
+| Wall clock | spread over ~9 h; paused and resumed several times |
+| Throughput | 21.2 tok/s, 3.8 s per attempt |
+| VRAM | 5.5 GB |
+| Prompt tokens | 5,286,792 |
+| Completion tokens | 403,620 |
+| Turns | 6,225 (1.26 per attempt) |
+| Raw output | [`results/final/local-7b-agentic.jsonl`](../results/final/local-7b-agentic.jsonl) (4.4 MB) |
 
-Early measurement at 343 attempts: 1.47 turns per attempt, 4.9 s per attempt — a 1.65× slowdown
-against the single-shot arm. That multiplier is itself a result: it is what self-correction
-costs, against whatever it buys.
+### Result
 
-Results will be added here when the arm completes.
+| k | pass@k | pass^k | gap |
+|---|---|---|---|
+| 1 | 46.4% | 46.4% | 0.0 |
+| 2 | 49.2% | 43.6% | 5.5 |
+| 5 | 52.2% | 40.9% | 11.3 |
+| 10 | 54.2% | 39.5% | 14.7 |
+
+Outcome of 4,960 scoreable attempts:
+
+| | count | share |
+|---|---|---|
+| correct | 2,301 | 46.4% |
+| ran, wrong rows | 2,243 | 45.2% |
+| SQL did not execute | 398 | 8.0% |
+| query timed out | 18 | 0.4% |
+
+Strict scoring: 2,228 matches (44.9%). 3.2% of matches depend on accepting extra columns.
+
+73 of 496 questions (14.7%) were answered correctly some of the time but not always.
+
+### What the retry loop recovered
+
+| | |
+|---|---|
+| attempts that retried | 793 (16.0%) |
+| …ended up executing | 377 (47.5% of those) |
+| …ended up correct | 140 (17.7% of those) |
+| of the misses it could have fixed, it fixed | 5.0% |
+
+Retries fire on execution failure only, so the loop can never reach an attempt that runs
+cleanly and returns the wrong rows. That is the ceiling, and against arm A it was already low:
+15.9% of single-shot attempts errored out, against 40.9% that failed silently.
+
+### Against arm A
+
+Both arms scored on the same 496 questions, k=10.
+
+| | arm A | arm B | difference | 95% CI |
+|---|---|---|---|---|
+| pass@k | 49.8% | 54.2% | +4.4 | [+2.4, +6.7] |
+| pass^k | 36.1% | 39.5% | +3.4 | [+1.0, +5.8] |
+| gap | 13.7 | 14.7 | **+1.0** | |
+| inconsistent questions | 13.7% | 14.7% | +1.0 | |
+
+Reliability improved on 27 questions and worsened on 10. Cost: 1.28× the time, 1.26 turns
+per attempt, 32% more prompt tokens.
+
+### Notes
+
+Both estimators rose and the distance between them rose too. The early measurement quoted
+here before the arm finished — 1.47 turns per attempt at 343 attempts — did not hold: the
+final figure is 1.26, because the retry rate fell as the run moved through databases. The
+early number was taken from the first database alphabetically and was not representative.
+That is the reason this file records whole runs rather than progress snapshots.
 
 ---
 
@@ -122,7 +181,8 @@ confounding it with different training data or tokenizer.
 | Model | `qwen2.5-coder:3b` (Q4_K_M, 1.9 GB) |
 | Max turns | 1 |
 | Attempts | 4,980 (498 × 10) |
-| Status | **queued** |
+| Started | 2026-09-17 18:33 UTC |
+| Status | **running** |
 
 ---
 
@@ -132,12 +192,14 @@ confounding it with different training data or tokenizer.
 uv venv && uv pip install -e ".[dev]"
 uv run python scripts/fetch_databases.py          # 330 MB, one time
 ollama pull qwen2.5-coder:7b
+ollama pull qwen2.5-coder:3b
 
 uv run python scripts/run_arm.py --arm local-7b-single  --k 10
 uv run python scripts/run_arm.py --arm local-7b-agentic --k 10 --max-turns 3
 uv run python scripts/run_arm.py --arm local-3b-single  --k 10 --model qwen2.5-coder:3b
 
-uv run python scripts/report.py
+uv run python scripts/report.py                    # each arm on its own
+uv run python scripts/compare_arms.py              # arms against each other
 ```
 
 Any run can be interrupted and restarted with the same command; completed attempts are skipped.
