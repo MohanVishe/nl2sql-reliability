@@ -32,9 +32,13 @@ gives the same correct answer every time.
 can produce different answers. So the published scores describe a best case, not what you get in
 production.
 
-**What we found.** On the first completed run: the model looks ~50% capable, but it is only
-~36% *reliable*. Over a quarter of its apparent ability does not survive repetition. And the
-failures are mostly silent — queries that run perfectly and return the wrong data.
+**What we found.** The model looks ~50% capable, but it is only ~36% *reliable*. Over a
+quarter of its apparent ability does not survive repetition. And the failures are mostly silent
+— queries that run perfectly and return the wrong data.
+
+**And the fix everyone reaches for doesn't fix it.** Letting the model read its own error and
+retry — an "AI agent" — raised both numbers but widened the gap between them, because it mostly
+converts always-wrong questions into sometimes-right ones.
 
 **The goal.** Produce a number the field does not currently publish, with the raw evidence
 attached so anyone can check it.
@@ -204,6 +208,10 @@ on. So we expect self-correction to help far less than people assume — and we'
 either way. We also count the extra tokens, because "marginally better at triple the cost" is a
 real finding.
 
+> That prediction is left here as written, before the run. [§8 has the answer](#setup-b-does-letting-the-ai-fix-itself-help):
+> it was right about the mechanism and wrong about the headline — retrying helped more than
+> expected on both metrics, while making the thing we actually measure slightly worse.
+
 **Why C is interesting.** If the 3B model shows a *similar* gap to the 7B, then reliability isn't
 something you buy by scaling up, and that changes how you'd build a product. Both are from the
 same model family, so the comparison isolates size rather than confounding it with different
@@ -244,7 +252,7 @@ noise as model unreliability. So we run both queries and compare what comes back
 
 ## 8. What we found
 
-**Setup A is complete: 4,980 attempts, 498 questions, 10 repetitions each, 4.12 hours of
+**Setups A and B are complete: 9,960 attempts, 498 questions, 10 repetitions each, 9.4 hours of
 computation.** Model: Qwen2.5-Coder-7B, compressed to 4-bit, running locally.
 
 ### The headline
@@ -323,6 +331,69 @@ another lost 23 points.
 That's useful if you're building something: you cannot read a model's benchmark score and assume
 it transfers to *your* database. You have to measure on yours.
 
+### Setup B: does letting the AI fix itself help?
+
+This is the "agentic" setup. Same model, same questions, same everything — but now, when the
+model's query fails to run, we hand it the error message and let it try again, up to three
+times. It never sees the right answer; it only sees its own mistake.
+
+This is what most people mean by an AI agent, and it is widely assumed to be better. Here is
+what it actually did.
+
+| k | pass@k — *can* it? | pass^k — *does it always*? | gap |
+|---|---|---|---|
+| 1 | 46.4% | 46.4% | 0.0 |
+| 5 | 52.2% | 40.9% | 11.3 |
+| **10** | **54.2%** | **39.5%** | **14.7** |
+
+Side by side with setup A:
+
+| | A: one shot | B: retry on error | change |
+|---|---|---|---|
+| pass@10 (capability) | 49.8% | 54.2% | **+4.4** |
+| pass^10 (reliability) | 36.1% | 39.5% | **+3.4** |
+| **the gap** | **13.7** | **14.7** | **+1.0** |
+| questions it's inconsistent on | 13.7% | 14.7% | +1.0 |
+| time per attempt | 3.0 s | 3.8 s | 1.28× |
+
+**Both numbers went up. So did the gap between them.** That is the result, and it is not the
+one you'd guess.
+
+Retrying genuinely helps — both improvements are real, not noise. (We checked: resampling the
+questions 10,000 times, the improvement stays positive every time. See §9.) But it helps
+*capability* more than it helps *reliability*. What retrying mostly does is take a question the
+model used to fail on every time and turn it into a question the model now gets right
+*sometimes*. On a leaderboard that's a clear win. If you're running this unattended, you have
+traded a predictable failure for an unpredictable one, which is arguably worse — a query that
+always breaks gets noticed and fixed, and one that breaks one time in six does not.
+
+### Why the retry loop can't do much
+
+The loop only fires when a query **fails to run**. Look back at §3: that wrong query executed
+perfectly and returned a clean, wrong table. There is no error message to hand back. The loop
+never even wakes up.
+
+So its reach is capped in advance, and we can measure exactly how capped:
+
+| | count | |
+|---|---|---|
+| Attempts that triggered a retry | 793 | 16% of all attempts |
+| …that ended up running at all | 377 | 48% of those |
+| …that ended up **correct** | 140 | 18% of those |
+| **Of the failures it could have fixed, it fixed** | | **5.0%** |
+
+One in twenty. And note the middle row — more than half the time, the model reads its own error
+message and still produces something that won't run.
+
+There's a cost on the other side too. Compared question by question, setup B's reliability
+improved on 27 questions and **got worse on 10**. A second turn sometimes talks the model out
+of a query that was already right.
+
+**The practical takeaway:** an agent loop built on error messages can only address the failures
+that announce themselves. In this study those were the minority — and the silent failures,
+which are the ones that actually hurt, went *up* (40.9% → 45.2% of attempts), because queries
+that used to crash now run and return something wrong instead.
+
 ---
 
 ## 9. How we know the numbers are right
@@ -345,27 +416,51 @@ correctly some-but-not-all of the time. These are computed by completely separat
 
 They agree. Two independent routes to the same quantity.
 
+Both identities hold for setup B as well: 46.4% = 46.4% at k=1, and 54.2 − 39.5 = 14.7 points
+against 73 of 496 = 14.72% inconsistent questions.
+
 **Check 3 — no AI grades the AI.** There is no "LLM as judge" anywhere in this project. A query
 is correct if running it against the real database produces the correct rows. That's a fact
 about a database, not an opinion that could drift.
 
-**Check 4 — 229 automated tests**, run against Python 3.11, 3.12 and 3.13 on every change,
+**Check 4 — is the A-vs-B difference real, or luck?** Setup B scored higher, but on 496
+questions a few points could be chance. To check, we use a **paired bootstrap**: take the
+per-question difference between the two setups, draw 496 of those differences at random (with
+repeats), average them, and do that 10,000 times. That builds a picture of how much the answer
+would wobble if we'd happened to pick a different set of questions.
+
+The middle 95% of those 10,000 averages is the interval quoted earlier: **[+2.4, +6.7] for
+capability and [+1.0, +5.8] for reliability**. Neither interval contains zero, so the
+improvement isn't an artefact of which questions we happened to ask.
+
+Two details matter. We resample **questions**, not attempts — questions are the independent
+unit here, and resampling attempts within a question would produce an interval far too narrow
+and a confidence nobody has earned. And the comparison is **paired**: each question is compared
+against itself across the two setups, which cancels out the fact that some questions are simply
+harder than others.
+
+**Check 5 — 248 automated tests**, run against Python 3.11, 3.12 and 3.13 on every change,
 including tests against the real databases.
 
-**Check 5 — everything is published.** All 4,980 raw attempts are in the repository: every reply,
+**Check 6 — everything is published.** All 9,960 raw attempts are in the repository: every reply,
 every extracted query, both verdicts, timings, token counts. Every number above can be
 recomputed without running a model.
 
-### Two honest caveats
+### Three honest caveats
 
 **496 questions, not 498.** Two questions have reference SQL that doesn't execute against the
 shipped database. They are flagged and excluded everywhere rather than being counted as model
 failures — which would have been the convenient choice, since it would have made the model look
 worse and the finding look bigger.
 
-**These results describe one model, on one day, at one setting.** Qwen2.5-Coder-7B at 4-bit,
-temperature 0.2, 2026-09-17. They do not automatically transfer to larger hosted models, and
-this study doesn't claim they do.
+**These results describe one model, at one setting.** Qwen2.5-Coder-7B at 4-bit, temperature
+0.2, measured 2026-09-16 to 2026-09-17. They do not automatically transfer to larger hosted
+models, and this study doesn't claim they do.
+
+**Setup B's retry loop is one design, not the only one.** It retries on execution errors, up to
+three turns, and never sees the expected rows. A loop that also checked the result for
+plausibility, or ran more turns, might do better — this study measures the common design, not
+the best possible one.
 
 ---
 
@@ -440,8 +535,17 @@ Worth stating, because "it worked first time" is rarely true and usually means n
 **This study costs nothing to run or reproduce.** No paid API, no cloud, no hosting.
 
 Everything runs on one desktop (Ryzen 5 3600, 16 GB RAM, RTX 3070 with 8 GB of video memory).
-Measured: 3.0 seconds per query, 20.3 tokens per second, 5.8 GB of video memory. Setup A took
-4.12 hours and consumed 4.0 million input tokens and 0.3 million output tokens.
+Measured at about 21 tokens per second and under 6 GB of video memory:
+
+| | Setup A | Setup B |
+|---|---|---|
+| Seconds per attempt | 3.0 | 3.8 |
+| Total generation time | 4.12 h | 5.28 h |
+| Input tokens | 4.0 M | 5.3 M |
+| Output tokens | 0.30 M | 0.40 M |
+
+Setup B costs 28% more time and 32% more input tokens for its 4.4 points of capability — a
+tradeoff worth knowing about before building a retry loop into a product.
 
 That token count is the point. **On a typical free API tier, Setup A alone would take about
 eight days** — and that's why nobody publishes this number. Reliability only becomes visible
@@ -459,12 +563,12 @@ It also means anyone can reproduce this, which is the difference between a resul
 | Setup | State |
 |---|---|
 | **A** — 7B, single attempt | ✅ Complete. 4,980 attempts published. |
-| **B** — 7B, self-correcting | 🔄 Running |
-| **C** — 3B, single attempt | ⏳ Queued |
+| **B** — 7B, self-correcting | ✅ Complete. 4,980 attempts published. |
+| **C** — 3B, single attempt | 🔄 Running |
 
-229 tests passing. Continuous integration green on Python 3.11, 3.12 and 3.13.
+248 tests passing. Continuous integration green on Python 3.11, 3.12 and 3.13.
 
-Raw results for Setup A: [`results/final/local-7b-single.jsonl`](../results/final/local-7b-single.jsonl)
+Raw results: [`results/final/`](../results/final/) — one file per setup, one line per attempt.
 
 ---
 
