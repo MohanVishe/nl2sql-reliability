@@ -30,8 +30,14 @@ A model can score highly on the first and poorly on the second. That distance is
 Two supporting questions:
 
 - Does an **agentic loop** — execute, read the error, retry — improve reliability, or mostly
-  spend tokens rewriting queries that were already right?
-- Is **temperature 0** actually deterministic in practice?
+  spend tokens rewriting queries that were already right? *Answered by arm B: it improves both
+  metrics and still widens the gap between them.*
+- Does **model size** buy reliability, or only capability? *Answered by arm C: reliability falls
+  more than twice as fast as capability when parameters are halved.*
+
+Not addressed here: whether **temperature 0** is deterministic in practice. It would need its
+own arm — the three above all run at 0.2, and the runner refuses temperature 0 outright, because
+near-identical repetitions would make pass^k describe the decoder rather than the model.
 
 ## Why the dataset is not plain BIRD
 
@@ -100,50 +106,53 @@ uv run python scripts/report.py
 
 ## Status
 
-**Two arms complete: 9,960 attempts over 498 questions, k=10 each.** Qwen2.5-Coder-7B at Q4,
-temperature 0.2, 9.4 hours of local generation.
+**All three arms complete: 14,940 attempts over 498 questions, k=10 each**, 13.4 hours of local
+generation at temperature 0.2.
 
-| arm | k | pass@k | pass^k | gap |
+| arm | pass@10 | pass^10 | gap | inconsistent |
 |---|---|---|---|---|
-| A — single-shot | 1 | 42.9% | 42.9% | 0.0 |
-| A — single-shot | 5 | 48.2% | 37.7% | 10.6 |
-| **A — single-shot** | **10** | **49.8%** | **36.1%** | **13.7** |
-| B — retry on error | 1 | 46.4% | 46.4% | 0.0 |
-| B — retry on error | 5 | 52.2% | 40.9% | 11.3 |
-| **B — retry on error** | **10** | **54.2%** | **39.5%** | **14.7** |
+| **A** — 7B, single-shot | 49.8% | 36.1% | **13.7** | 13.7% |
+| **B** — 7B, retry on error | 54.2% | 39.5% | **14.7** | 14.7% |
+| **C** — 3B, single-shot | 42.3% | 18.8% | **23.6** | 23.6% |
 
-More than a quarter of the model's apparent capability does not survive repetition. The failure
-breakdown matters more than the headline: in arm A, 15.9% of attempts produced SQL that would
-not run, and **40.9% produced SQL that ran cleanly and returned the wrong rows** — no error,
-nothing for a pipeline to catch.
+Read the gap column, not the first one. It is the share of questions a model can solve but does
+not solve dependably, and **neither intervention closed it — both widened it.**
 
-**Letting the model see its own error and retry moved both numbers up — and the gap up with
-them.** Arm B gains +4.4 points of pass@k and +3.4 of pass^k (95% CIs [+2.4, +6.7] and
-[+1.0, +5.8], paired bootstrap over questions), at 1.28× the time. But the distance between the
-two metrics widens from 13.7 to 14.7 points, and the share of inconsistent questions rises from
-13.7% to 14.7%. Self-correction converts hard failures into answers that are *sometimes* right:
-a gain on the leaderboard metric, a loss on the one that decides whether you can leave it
-running.
+**Arm A establishes the problem.** More than a quarter of the model's apparent capability does
+not survive repetition. The failure breakdown matters more than the headline: 15.9% of attempts
+produced SQL that would not run, and **40.9% produced SQL that ran cleanly and returned the
+wrong rows** — no error, nothing for a pipeline to catch.
 
-The loop is also narrower than it looks. Retries fire on execution errors only, so an attempt
-that runs cleanly and returns wrong rows offers nothing to react to. Of the misses it was in a
-position to fix, it fixed **5.0%**.
+**Arm B: self-correction helps capability more than reliability.** Showing the model its own
+execution error and letting it retry gains +4.4 points of pass@k and +3.4 of pass^k (95% CIs
+[+2.4, +6.7] and [+1.0, +5.8], paired bootstrap over questions), at 1.28× the time. But the gap
+widens to 14.7, and silent failures rise from 40.9% to 45.2% of attempts — queries that used to
+crash now run and return something wrong instead. The loop is narrower than it looks: retries
+fire on execution errors only, so of the misses it was in a position to fix, it fixed **5.0%**.
+It improved 27 questions and broke 10.
 
-Leniency does not explain any of it: 2.5% (A) and 3.2% (B) of matches depend on accepting an
-extra projected column. Per-database the gap ranges from 22.7 points to zero, so reliability is
-not a fixed property of the model.
+**Arm C: reliability falls more than twice as fast as size.** Halving the parameters costs 7.5
+points of pass@k but **17.3 points of pass^k** ([−21.4, −13.3]). The gap nearly doubles to 23.6,
+reliability worsened on 102 questions against 16 improved, and the one database where the 7B was
+perfectly consistent opens to 16.7 points. A single-run benchmark would have put these two
+models 13 points apart; on all-of-ten agreement they are 17 apart. The 3B is also **not faster**
+here — 2.9 s per attempt against 3.0 — so it buys VRAM, not latency.
+
+Leniency explains none of it: 2.5%, 3.2% and 3.0% of matches respectively depend on accepting an
+extra projected column. Per-database the gap ranges from 31.4 points to zero, so reliability is
+not a fixed property of a model — you cannot read a benchmark score and assume it transfers to
+your schema.
 
 Two questions are excluded throughout because their reference SQL does not execute; 496 are
 scored, not 498.
 
-Raw per-attempt output: [`results/final/`](results/final/). Full reasoning and results in
-[docs/EXPLAINED.md](docs/EXPLAINED.md); exact configuration for every arm in
-[docs/RUN-LOG.md](docs/RUN-LOG.md).
+Raw per-attempt output: [`results/final/`](results/final/) — every reply, every extracted query,
+both verdicts, timings and token counts, so every figure above can be recomputed without running
+a model. Full reasoning in [docs/EXPLAINED.md](docs/EXPLAINED.md); exact configuration for every
+arm in [docs/RUN-LOG.md](docs/RUN-LOG.md).
 
-The 3B arm (C) is running.
-
-Measured on the reference machine (Ryzen 5 3600, 16 GB, RTX 3070 8 GB): 3.0 s per attempt
-single-shot and 3.8 s with retries, ~21 tok/s, under 6 GB of VRAM.
+Measured on the reference machine (Ryzen 5 3600, 16 GB, RTX 3070 8 GB) at ~21 tok/s and under
+6 GB of VRAM.
 
 ## Install
 
