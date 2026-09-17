@@ -122,7 +122,8 @@ Two questions are excluded throughout because their reference SQL does not execu
 scored, not 498.
 
 Raw per-attempt output: [`results/final/local-7b-single.jsonl`](results/final/local-7b-single.jsonl).
-Full reasoning and results in [docs/EXPLAINED.md](docs/EXPLAINED.md).
+Full reasoning and results in [docs/EXPLAINED.md](docs/EXPLAINED.md); exact configuration for
+every arm in [docs/RUN-LOG.md](docs/RUN-LOG.md).
 
 The agentic arm (B) is running; the 3B arm (C) is queued.
 
