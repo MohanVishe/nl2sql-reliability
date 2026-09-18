@@ -5,10 +5,16 @@
 ![cost](https://img.shields.io/badge/cost-%240-brightgreen)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
-AI can turn a plain-English question into a database query. Leaderboards score this by asking
-each question **once**. But AI is random — ask again and you can get a different answer.
+AI can turn a plain-English question — *"which customers spent the most last month?"* — into
+**SQL**, the language databases understand. Leaderboards score this by asking each question
+**once**. But AI has randomness built in — ask again and you can get a different answer.
 
-So I asked every question **ten times**.
+So I asked every question **ten times**. Here are the ten tries on one real question (the one
+explained [below](#one-character-half-the-time)):
+
+> ✅ ✅ ✅ ❌ ❌ ✅ ❌ ✅ ❌ ❌ &nbsp; *(5 right out of 10)*
+
+A leaderboard sees only the first try, and would score this question as solved.
 
 <p align="center"><img src="docs/img/gap.svg" alt="Chart: the normal AI is right at least once on 49.8% of questions but right all ten times on only 36.1%, a gap of 13.7 points. The AI that retries on error: 54.2% vs 39.5%, gap 14.7. The smaller AI: 42.3% vs 18.8%, gap 23.6." width="760"></p>
 
@@ -16,6 +22,16 @@ So I asked every question **ten times**.
 even once. **The orange dot is what you can actually rely on.** The line between them is questions
 the AI gets right *only sometimes*: they pass your testing, then fail in production with no
 warning.
+
+---
+
+## One try hides the problem
+
+<p align="center"><img src="docs/img/gap-by-tries.svg" alt="Chart: for the normal AI, asked once, both measures are 42.9%. Asked twice: 45.5% right at least once versus 40.4% right both times. Asked ten times: 49.8% versus 36.1%, a gap of 13.7 points." width="760"></p>
+
+Asked once, the two lines are the same number — that is all a leaderboard can see. Each extra
+try gives the AI another chance to get lucky (blue goes up) and another chance to slip (orange
+goes down). **Most of the gap has opened by the third try.**
 
 ---
 
@@ -89,7 +105,12 @@ faster.
 **498 questions → ask the AI 10 times each → run every query on the real database → check the
 rows that come back**
 
-- **Three setups:** a 7B model, the same model with retries, and a smaller 3B model.
+- **Three setups:** a 7B model, the same model with retries, and a smaller 3B model. (*7B* means
+  7 billion *parameters* — the internal numbers a model learns. More parameters usually means a
+  more capable, but slower and more memory-hungry, model.)
+- **Free, open models** ([Qwen2.5-Coder](https://github.com/QwenLM/Qwen2.5-Coder)) running on my
+  own computer. Big hosted models like GPT or Claude weren't part of this round; the same
+  harness can test them.
 - **14,940 AI-written queries** in total, all run locally on one desktop GPU. **Cost: $0.**
 - **A cleaned-up benchmark.** The popular BIRD test set has errors in about half its answer
   key, so I used [Arcwise-Plat-SQL](https://github.com/uiuc-kang-lab/text_to_sql_benchmarks), a
@@ -102,9 +123,10 @@ rows that come back**
 - **Every single attempt is published** in [`results/final/`](results/final/) — the AI's raw
   reply, the query, and the verdict. You can recompute every number here without running a model.
 - **Two built-in math checks** confirm the scoring is right — both pass for all three setups.
-- **Every change is tested for luck** with 10,000 resamples. The score changes above are all
-  real; the only one that isn't is the retry loop's tiny gap change, which is why it's called
-  "within noise".
+- **Every change is tested for luck.** Could a difference just be chance — a few easy questions
+  landing on one side? I reshuffled the questions 10,000 times and checked whether the difference
+  survives. The score changes above all do; the only one that doesn't is the retry loop's tiny
+  gap change, which is why it's called "within noise".
 - **251 automated tests** run on every change.
 
 ---
@@ -116,6 +138,7 @@ rows that come back**
 | The whole story, no background needed | **[docs/EXPLAINED.md](docs/EXPLAINED.md)** |
 | The technical design, scoring rules and full tables | [docs/METHOD.md](docs/METHOD.md) |
 | Exact settings, dates and timings for each run | [docs/RUN-LOG.md](docs/RUN-LOG.md) |
+| A word you didn't recognise | [the glossary](docs/EXPLAINED.md#14-glossary) |
 
 ## Run it yourself
 
