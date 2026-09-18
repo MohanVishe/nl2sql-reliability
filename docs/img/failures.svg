@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 318" width="760" height="318" role="img" aria-labelledby="t d">
+<title id="t">What happened on every attempt</title>
+<desc id="d">Normal AI: 42.9% correct, 40.9% ran without error but returned the wrong answer, 16.1% crashed with an error. AI that retries on error: 46.4% correct, 45.2% silently wrong, 8.4% crashed. Smaller AI: 29.7% correct, 32.8% silently wrong, 37.5% crashed.</desc>
+<style>
+  .bg{fill:#fcfcfb;stroke:rgba(11,11,11,.10)}
+  .t1{fill:#0b0b0b}.t2{fill:#52514e}.mu{fill:#898781}
+  .ok{fill:#0ca30c}.bad{fill:#d03b3b}.err{fill:#c3c2b7}
+  .on-dark{fill:#ffffff}.on-light{fill:#0b0b0b}.ink-fixed{fill:#0b0b0b}
+  .gapline{stroke:#fcfcfb}
+  @media (prefers-color-scheme: dark){
+    .bg{fill:#1a1a19;stroke:rgba(255,255,255,.10)}
+    .t1{fill:#ffffff}.t2{fill:#c3c2b7}
+    .err{fill:#5b5a56}.on-light{fill:#ffffff}
+    .gapline{stroke:#1a1a19}
+  }
+  text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+</style>
+<rect class="bg" x="0.5" y="0.5" width="759" height="317" rx="12"/>
+<text class="t1" x="28" y="42" font-size="20" font-weight="600">Red is the problem: wrong answers that raise no error</text>
+<text class="t2" x="28" y="66" font-size="14">All 4,960 attempts per setup. Grey crashes get noticed. Red ones don&#8217;t.</text>
+<rect class="ok" x="28" y="89" width="12" height="12" rx="3"/>
+<text class="t2" x="46" y="100" font-size="13">✓ Correct</text>
+<rect class="bad" x="138" y="89" width="12" height="12" rx="3"/>
+<text class="t2" x="156" y="100" font-size="13">✗ Ran fine, wrong answer — no error</text>
+<rect class="err" x="430" y="89" width="12" height="12" rx="3"/>
+<text class="t2" x="448" y="100" font-size="13">⚠ Crashed — error raised</text>
+<text class="t1" x="28" y="151" font-size="15" font-weight="600">Normal AI</text>
+<text class="mu" x="28" y="168" font-size="12">7B, one try</text>
+<clipPath id="c0"><rect x="262" y="138" width="462" height="30" rx="4"/></clipPath>
+<g clip-path="url(#c0)">
+<rect class="ok" x="262.0" y="138" width="198.2" height="30"/>
+<rect class="bad" x="460.2" y="138" width="189.0" height="30"/>
+<rect class="err" x="649.2" y="138" width="74.4" height="30"/>
+<line class="gapline" x1="460.2" y1="138" x2="460.2" y2="168" stroke-width="2"/>
+<line class="gapline" x1="649.2" y1="138" x2="649.2" y2="168" stroke-width="2"/>
+</g>
+<text class="ink-fixed" x="361.1" y="158" font-size="13" font-weight="600" text-anchor="middle">43%</text>
+<text class="on-dark" x="554.7" y="158" font-size="13" font-weight="600" text-anchor="middle">41%</text>
+<text class="on-light" x="686.3" y="158" font-size="13" font-weight="600" text-anchor="middle">16%</text>
+<text class="t1" x="28" y="209" font-size="15" font-weight="600">AI that retries on error</text>
+<text class="mu" x="28" y="226" font-size="12">7B, up to 3 tries</text>
+<clipPath id="c1"><rect x="262" y="196" width="462" height="30" rx="4"/></clipPath>
+<g clip-path="url(#c1)">
+<rect class="ok" x="262.0" y="196" width="214.4" height="30"/>
+<rect class="bad" x="476.4" y="196" width="208.8" height="30"/>
+<rect class="err" x="685.2" y="196" width="38.8" height="30"/>
+<line class="gapline" x1="476.4" y1="196" x2="476.4" y2="226" stroke-width="2"/>
+<line class="gapline" x1="685.2" y1="196" x2="685.2" y2="226" stroke-width="2"/>
+</g>
+<text class="ink-fixed" x="369.2" y="216" font-size="13" font-weight="600" text-anchor="middle">46%</text>
+<text class="on-dark" x="580.8" y="216" font-size="13" font-weight="600" text-anchor="middle">45%</text>
+<text class="on-light" x="704.6" y="216" font-size="13" font-weight="600" text-anchor="middle">8%</text>
+<text class="t1" x="28" y="267" font-size="15" font-weight="600">Smaller AI</text>
+<text class="mu" x="28" y="284" font-size="12">3B, one try</text>
+<clipPath id="c2"><rect x="262" y="254" width="462" height="30" rx="4"/></clipPath>
+<g clip-path="url(#c2)">
+<rect class="ok" x="262.0" y="254" width="137.2" height="30"/>
+<rect class="bad" x="399.2" y="254" width="151.5" height="30"/>
+<rect class="err" x="550.8" y="254" width="173.2" height="30"/>
+<line class="gapline" x1="399.2" y1="254" x2="399.2" y2="284" stroke-width="2"/>
+<line class="gapline" x1="550.8" y1="254" x2="550.8" y2="284" stroke-width="2"/>
+</g>
+<text class="ink-fixed" x="330.6" y="274" font-size="13" font-weight="600" text-anchor="middle">30%</text>
+<text class="on-dark" x="475.0" y="274" font-size="13" font-weight="600" text-anchor="middle">33%</text>
+<text class="on-light" x="637.4" y="274" font-size="13" font-weight="600" text-anchor="middle">38%</text>
+</svg>
