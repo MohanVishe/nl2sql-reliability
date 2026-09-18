@@ -232,6 +232,37 @@ something you buy by scaling up, and that changes how you'd build a product. Bot
 same model family, so the comparison isolates size rather than confounding it with different
 training data.
 
+### The settings, and why we picked them
+
+An AI model has a few dials. Here is where each one was set, in plain terms.
+
+- **Temperature: 0.2.** Temperature is the "randomness" dial. At 0 the model always picks its
+  single most likely next word, so asking ten times gives the same answer ten times and there is
+  nothing to measure. Higher numbers mean more variety. 0.2 is **low and cautious**, the kind of
+  setting a team would pick for writing SQL, so the gap isn't caused by turning the randomness
+  up unusually high.
+- **No fixed "seed".** A seed makes the randomness repeat exactly. Fixing one would make all ten
+  tries identical, which defeats the point.
+- **Ten tries per question.** The gap keeps growing the more times you ask (§8 shows it at 2
+  tries vs 10), so a small number of tries understates it. Ten was affordable: about 4–5 hours
+  per setup on one home GPU.
+- **Qwen2.5-Coder, 7B and 3B.** A strong free model built for code, and the biggest version that
+  fits on an 8 GB graphics card. The 3B is from the same family, so the only real difference is
+  size.
+- **4-bit compression.** The full-size 7B model needs about 14 GB of memory; the compressed
+  version needs about 4.7 GB. That's what made a home GPU enough.
+- **Room to read: 8,192 tokens.** The model must see the whole database structure. The longest
+  prompt was under 2,000 tokens (under 7,000 with retries), so this fits everything. The software
+  quietly chops the start off anything too long, so the harness checks: nothing was chopped.
+- **Room to answer: 512 tokens.** The answer is one query, usually about 50 tokens. Only 21 of
+  the ~10,000 single-try answers hit the limit, mostly the model stuck repeating itself.
+- **Three tries for setup B.** The first attempt plus two fixes. The third try rescued just 12
+  answers against 128 for the second, so more tries would have added little.
+- **30-second limit per query**, and **read-only databases.** AI-written SQL can't be trusted:
+  one runaway query shouldn't stall the run, and one accidental "delete" shouldn't wreck it.
+
+What we didn't test: temperature 0, and higher temperatures. Both are fair next questions.
+
 ---
 
 ## 7. How it actually works

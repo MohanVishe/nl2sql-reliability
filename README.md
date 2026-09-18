@@ -117,6 +117,11 @@ rows that come back**
   version corrected by database experts.
 - **No AI grades the AI.** A query counts as correct only if it returns the right rows from the
   real database.
+- **Settings:** randomness ("temperature") at a low **0.2**. It can't be 0, or all ten tries
+  would come out identical and there'd be nothing to measure. Each reply can be up to 512 tokens
+  (a single query needs about 50). Reasons for every setting are in
+  [EXPLAINED §6](docs/EXPLAINED.md#the-settings-and-why-we-picked-them) and
+  [METHOD](docs/METHOD.md#settings-and-why).
 
 ## Can you trust the numbers?
 
