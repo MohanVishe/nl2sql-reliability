@@ -38,6 +38,16 @@ All at temperature 0.2, k = 10, 8192-token context, 512 max new tokens, no decod
 arm. The runner refuses temperature 0 outright, because near-identical repetitions would make
 pass^k describe the decoder rather than the model.
 
+## Related work
+
+The all-attempts metric is not new. τ-bench defines pass^k for tool-using agents;
+[DySQL-Bench](https://arxiv.org/abs/2510.26495) reports an all-trials score for multi-turn
+text-to-SQL; [Knowing When to Stop](https://arxiv.org/abs/2607.03991) uses execution agreement
+across repeated samples as a stopping rule for text-to-SQL inference. This study's contribution
+is narrower: single-turn pass@k vs pass^k on an expert-corrected answer key, with failures split
+by whether they raise an error, the reach of an error-driven retry loop measured directly, and
+the effect of model size on the gap — each difference with a paired interval.
+
 ## Why the dataset is not plain BIRD
 
 Jin et al. ([arXiv:2601.08778](https://arxiv.org/abs/2601.08778), VLDB 2026) audited the
