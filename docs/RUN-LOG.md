@@ -37,6 +37,8 @@ Identical for every arm unless an entry says otherwise.
 | Decode seed | none — repetitions must differ, or pass^k measures nothing |
 | Scoring | execution-based; both lenient and strict recorded |
 
+The reason for each setting is in [METHOD.md](METHOD.md#settings-and-why).
+
 Two questions are excluded from every figure because their reference SQL does not execute
 against the shipped database. 496 are scored, not 498.
 

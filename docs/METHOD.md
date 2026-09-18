@@ -32,11 +32,27 @@ The three configurations ("arms"):
 | B — `local-7b-agentic` | same | up to 3 turns; the model sees its own execution error, never the expected rows |
 | C — `local-3b-single` | Qwen2.5-Coder-3B, Q4_K_M | one generation per attempt |
 
-All at temperature 0.2, k = 10, 8192-token context, 512 max new tokens, no decode seed.
+### Settings, and why
+
+| Setting | Value | Why |
+|---|---|---|
+| Model | Qwen2.5-Coder-7B-Instruct | A strong open code model that fits the 8 GB GPU this ran on. 14B does not fit. |
+| Weights | Q4_K_M (4-bit) | BF16 7B needs ~14 GB. Q4 is ~4.7 GB and leaves room for the KV cache. |
+| Small model | Qwen2.5-Coder-3B, Q4_K_M | Same family, so the size comparison is not confounded by different training data or tokenizer. |
+| Temperature | 0.2 | Must be above zero: pass^k measures run-to-run variation, and a greedy decode makes every attempt near-identical. 0.2 is a low, conservative setting for SQL generation, so the gap is not produced by an unusually random configuration. |
+| Decode seed | none | A fixed seed would make the ten repetitions identical, and pass^k would measure nothing. |
+| k | 10 | The gap keeps widening with k (5.1 at k=2, 13.7 at k=10 on arm A; 8.1 vs 23.6 on arm C), so small k understates it. 10 was affordable: 4–5 h per arm locally, with no rate limit. |
+| Context window | 8,192 tokens | The largest single-turn prompt was 1,965 tokens and the largest three-turn conversation 6,678. 8,192 fits both inside 8 GB of VRAM. Ollama silently cuts over-long prompts from the front, so truncation is detected: 0 of 14,940 attempts were truncated. |
+| Max new tokens | 512 | One SQL query is the whole answer; gold queries average ~50 tokens. The cap cut off 10 of 4,980 replies on arm A and 11 on arm C (0.2%) — mostly the model repeating itself. They are scored as failures, so the cap moves no figure by more than 0.2 points. |
+| Max turns (arm B) | 3 | The first try plus two repairs. The third turn recovered 12 correct answers, against 128 from the second, so a longer loop would add little. |
+| Retry feedback | the database's error message only | Showing expected rows would let the model converge on the answer key and measure the harness rather than the model. |
+| Query deadline | 30 s | Generated SQL is untrusted; a runaway query must not stall the run. 10–18 attempts per arm hit it and are recorded as timeouts. |
+| Database access | read-only | One generated `DROP` or `UPDATE` would corrupt every later attempt. |
 
 **Not addressed:** whether temperature 0 is deterministic in practice. It would need its own
 arm. The runner refuses temperature 0 outright, because near-identical repetitions would make
-pass^k describe the decoder rather than the model.
+pass^k describe the decoder rather than the model. Results at higher temperatures are not
+measured either; the gap there may differ.
 
 ## Related work
 
