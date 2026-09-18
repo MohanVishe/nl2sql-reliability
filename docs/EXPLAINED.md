@@ -28,7 +28,7 @@ shorter read.
 **What we are doing.** Asking an AI the same database question ten times and checking whether it
 gives the same correct answer every time.
 
-**Why.** Public scoreboards ask each question *once*. AI models are random — the same question
+**Why.** Public scoreboards usually ask each question *once*. AI models are random — the same question
 can produce different answers. So the published scores describe a best case, not what you get in
 production.
 
@@ -41,8 +41,8 @@ quarter of its apparent ability does not survive repetition. And the failures ar
 much worse: 7.5 points of capability lost, and **17.3 points of reliability** — more than twice
 as much.
 
-**The goal.** Produce a number the field does not currently publish, with the raw evidence
-attached so anyone can check it.
+**The goal.** Measure that gap carefully on an expert-corrected test set, split the failures by
+whether a program could even notice them, and publish every raw attempt so anyone can check it.
 
 ---
 
@@ -84,7 +84,21 @@ And "ask again" is the normal case. A dashboard refreshing hourly asks the same 
 times a day. What you need to know is not "can it do this?" but **"does it do this every
 time?"**
 
-Nobody publishes that number. This project measures it.
+Headline leaderboards don't report that number. This project measures it.
+
+### Has anyone measured this before?
+
+Yes, in pieces — and it's worth being clear about that. The "right on every try" score comes
+from [τ-bench](https://arxiv.org/abs/2406.12045), a benchmark for customer-service agents.
+[DySQL-Bench](https://arxiv.org/abs/2510.26495) reports a similar all-tries score for
+*multi-turn* text-to-SQL conversations, and [Knowing When to
+Stop](https://arxiv.org/abs/2607.03991) uses agreement between repeated SQL runs to decide when
+a model has settled on an answer.
+
+What this project adds is the specific combination: repeated single-question runs on the
+*corrected* answer key (§5), every failure split into "crashed" versus "ran and was quietly
+wrong", a measurement of how much of that a retry loop can even reach, and how the gap changes
+when the model gets smaller.
 
 ---
 
@@ -272,7 +286,9 @@ Read the bottom row like this: across 498 questions, asking each one ten times �
 - **36.1%** were correct on all ten. That's what you can actually depend on.
 - The **13.7 point** difference is questions the model got right *sometimes*.
 
-**More than a quarter of its apparent capability doesn't survive being asked twice.**
+**More than a quarter of its apparent capability doesn't survive being asked ten times.**
+
+<p align="center"><img src="img/gap-by-tries.svg" alt="Chart: for the 7B model, asked once, both measures are 42.9%. Asked twice: 45.5% versus 40.4%. Asked ten times: 49.8% versus 36.1%, a gap of 13.7 points." width="760"></p>
 
 Notice the gap *grows* with k — 5.1 at two attempts, 13.7 at ten. That is the expected shape:
 every extra repetition is another chance to catch an inconsistency. It also means a study that
@@ -295,6 +311,11 @@ can detect and handle.
 **41% of all attempts produced SQL that executed perfectly and returned the wrong answer.** No
 error. No warning. Nothing for a pipeline to catch. Those are the dangerous ones, and they
 outnumber the catchable failures roughly 2.6 to 1.
+
+<p align="center"><img src="img/failures.svg" alt="Chart: for the 7B model, 43% of attempts were correct, 41% ran without error but gave the wrong answer, and 16% crashed. With retries: 46%, 45%, 8%. The 3B model: 30%, 33%, 38%." width="760"></p>
+
+The same split for all three setups. For the 3B model the crashes (grey) are the biggest
+share, but the silent wrong answers (red) are still a third of everything it produced.
 
 ### Does the scoring choice matter? No.
 
@@ -438,6 +459,8 @@ to **16.7 points**. Consistency that looked like a property of the task turned o
 property of the model doing it.
 
 ### All three, side by side
+
+<p align="center"><img src="img/gap.svg" alt="Chart: the 7B model is right at least once on 49.8% of questions and every time on 36.1%, a gap of 13.7. With retries: 54.2% and 39.5%, gap 14.7. The 3B model: 42.3% and 18.8%, gap 23.6." width="760"></p>
 
 | | A: 7B, one shot | B: 7B, retry | C: 3B, one shot |
 |---|---|---|---|
@@ -658,6 +681,10 @@ Raw results: [`results/final/`](../results/final/) — one file per setup, one l
 | **Text-to-SQL / NL2SQL** | Turning an English question into a database query |
 | **pass@k** | Did at least one of k attempts work? **Capability.** |
 | **pass^k** | Did *all* k attempts work? **Reliability.** |
+| **k** | How many times each question is asked. This study uses k = 10. |
+| **Gap** | pass@k minus pass^k — the questions a model gets right only *sometimes* |
+| **Parameters (7B, 3B)** | The internal numbers a model learns during training. 7B = 7 billion. More usually means more capable, slower and hungrier for memory. |
+| **Prompt** | The exact text sent to the model — here, the database structure plus the question |
 | **Execution accuracy** | Judging a query by the rows it returns, not the text it's written in |
 | **Benchmark** | A shared set of test questions with known answers |
 | **BIRD** | The standard text-to-SQL benchmark, whose answer key has documented errors |
@@ -669,6 +696,10 @@ Raw results: [`results/final/`](../results/final/) — one file per setup, one l
 | **Gold query / gold SQL** | The known-correct answer to a benchmark question |
 | **Schema** | The structure of a database — its tables and columns |
 | **Ollama** | Software for running AI models on your own computer |
+| **Estimator** | A formula for working out a number from a sample. "Unbiased" means it isn't tilted high or low on average. |
+| **Bootstrap / confidence interval** | The luck check. Re-draw the questions at random 10,000 times and see how much a result moves. A 95% interval is the range it stays inside 95% of the time; if that range includes zero, the difference could be chance. |
+| **Within noise** | A difference small enough that chance alone could explain it |
+| **Multiset** | A list where order doesn't matter but duplicates do — how returned rows are compared |
 | **JSONL** | A text file with one JSON record per line — how results are stored here |
 
 ---
