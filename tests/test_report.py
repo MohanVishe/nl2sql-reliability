@@ -51,7 +51,23 @@ class TestPrintRetries:
             attempt(turns=2, match=False, executed=True, run=1),
         ]
         report.print_retries("agentic", attempts)
-        assert "it fixed  50.0%" in capsys.readouterr().out
+        assert "share of all misses the loop fixed    50.0%" in capsys.readouterr().out
+
+    def test_silent_misses_count_in_all_misses_but_not_in_the_reachable_share(self, capsys):
+        # The loop fires on execution errors only. A query that runs and returns wrong rows
+        # never triggers it, so it belongs in "all misses" and must stay out of the
+        # reachable share. The two figures differ exactly when silent misses exist -- which
+        # is the case this label once got wrong.
+        attempts = [
+            attempt(turns=2, match=True, executed=True, run=0),  # reachable, rescued
+            attempt(turns=2, match=False, executed=True, run=1),  # reachable, not rescued
+            attempt(turns=1, match=False, executed=True, run=2),  # silent: unreachable
+            attempt(turns=1, match=False, executed=True, run=3),  # silent: unreachable
+        ]
+        report.print_retries("agentic", attempts)
+        out = capsys.readouterr().out
+        assert "...ended up correct          1   50.0% of those" in out  # 1 of 2 reachable
+        assert "share of all misses the loop fixed    25.0%" in out  # 1 of 4 misses
 
     def test_unrunnable_gold_is_excluded(self, capsys):
         attempts = [

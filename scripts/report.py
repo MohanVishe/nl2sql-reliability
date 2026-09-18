@@ -173,8 +173,11 @@ def print_retries(name: str, attempts: list[Attempt]) -> None:
     recovered = sum(1 for a in retried if a.executed)
     correct = sum(1 for a in retried if a.match)
     # Every retried attempt had a failing first turn, so without the loop it would have been
-    # a miss. Adding the ones it rescued back to the observed misses reconstructs what this
-    # arm would have scored single-shot, without needing the other arm to say so.
+    # a miss. Adding the ones it rescued back to the observed misses reconstructs every miss
+    # this arm would have had single-shot -- silent ones included, which the loop cannot
+    # reach. That makes this the loop's share of *all* misses, not of the reachable ones;
+    # the reachable share is the "ended up correct" line above. An earlier version of this
+    # label called it the reachable share, and the write-up repeated it.
     would_have_missed = sum(1 for a in scoreable if not a.match) + correct
 
     print(f"== {name}: what retrying recovered")
@@ -183,7 +186,7 @@ def print_retries(name: str, attempts: list[Attempt]) -> None:
     print(f"   ...ended up correct     {correct:>6} {correct / len(retried):>7.1%} of those")
     if would_have_missed:
         share = correct / would_have_missed
-        print(f"   of the misses it could have fixed, it fixed {share:>6.1%}")
+        print(f"   share of all misses the loop fixed   {share:>6.1%}")
     print()
 
 
