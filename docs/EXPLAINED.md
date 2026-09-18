@@ -36,10 +36,10 @@ production.
 quarter of its apparent ability does not survive repetition. And the failures are mostly silent
 — queries that run perfectly and return the wrong data.
 
-**Neither obvious fix closed that gap — both widened it.** Letting the model read its own
-error and retry (an "AI agent") raised both numbers but widened the distance between them.
-Halving the model's size cost 7.5 points of capability and **17.3 points of reliability** —
-more than twice as much.
+**Neither obvious fix closed that gap.** Letting the model read its own error and retry (an
+"AI agent") raised both numbers but left the gap where it was. Halving the model's size made it
+much worse: 7.5 points of capability lost, and **17.3 points of reliability** — more than twice
+as much.
 
 **The goal.** Produce a number the field does not currently publish, with the raw evidence
 attached so anyone can check it.
@@ -210,8 +210,8 @@ either way. We also count the extra tokens, because "marginally better at triple
 real finding.
 
 > That prediction is left here as written, before the run. [§8 has the answer](#setup-b-does-letting-the-ai-fix-itself-help):
-> it was right about the mechanism and wrong about the headline — retrying helped more than
-> expected on both metrics, while making the thing we actually measure slightly worse.
+> it was right about the mechanism and only half right about the result — retrying helped more
+> than expected on both metrics, and did nothing measurable to the gap.
 
 **Why C is interesting.** If the 3B model shows a *similar* gap to the 7B, then reliability isn't
 something you buy by scaling up, and that changes how you'd build a product. Both are from the
@@ -354,20 +354,21 @@ Side by side with setup A:
 |---|---|---|---|
 | pass@10 (capability) | 49.8% | 54.2% | **+4.4** |
 | pass^10 (reliability) | 36.1% | 39.5% | **+3.4** |
-| **the gap** | **13.7** | **14.7** | **+1.0** |
+| **the gap** | **13.7** | **14.7** | +1.0 *(within noise)* |
 | questions it's inconsistent on | 13.7% | 14.7% | +1.0 |
 | time per attempt | 3.0 s | 3.8 s | 1.28× |
 
-**Both numbers went up. So did the gap between them.** That is the result, and it is not the
-one you'd guess.
+**Both numbers went up. The gap between them didn't close.**
 
-Retrying genuinely helps — both improvements are real, not noise. (We checked: resampling the
-questions 10,000 times, the improvement stays positive every time. See §9.) But it helps
-*capability* more than it helps *reliability*. What retrying mostly does is take a question the
-model used to fail on every time and turn it into a question the model now gets right
-*sometimes*. On a leaderboard that's a clear win. If you're running this unattended, you have
-traded a predictable failure for an unpredictable one, which is arguably worse — a query that
-always breaks gets noticed and fixed, and one that breaks one time in six does not.
+Retrying genuinely helps — both improvements are real, not noise (see §9 for how we checked).
+But look at the gap row. It moved from 13.7 to 14.7, and that one-point change is **within
+noise**: re-running the same check on the gap itself, it could plausibly be anywhere from 2
+points narrower to 4 points wider. So we don't claim retrying made the gap worse. We claim
+something simpler: it made the model somewhat better across the board, and did nothing about its
+inconsistency. The questions it answered only sometimes, it still answers only sometimes.
+
+For anything running unattended, that is the part that matters. A retry loop can raise your
+average and leave every intermittent failure exactly as intermittent as it was.
 
 ### Why the retry loop can't do much
 
@@ -381,10 +382,13 @@ So its reach is capped in advance, and we can measure exactly how capped:
 |---|---|---|
 | Attempts that triggered a retry | 793 | 16% of all attempts |
 | …that ended up running at all | 377 | 48% of those |
-| …that ended up **correct** | 140 | 18% of those |
-| **Of the failures it could have fixed, it fixed** | | **5.0%** |
+| …that ended up **correct** | 140 | **18% of those** |
+| Share of *all* wrong answers the loop fixed | 140 of 2,799 | **5.0%** |
 
-One in twenty. And note the middle row — more than half the time, the model reads its own error
+Read the last two rows carefully, because they answer different questions. Of the failures the
+loop could actually see — the crashes — it turned about **one in six** into a right answer. But
+most failures were never crashes, so counted against *every* wrong answer, it fixed about **one
+in twenty**. And note the middle row: more than half the time, the model reads its own error
 message and still produces something that won't run.
 
 There's a cost on the other side too. Compared question by question, setup B's reliability
@@ -444,14 +448,14 @@ property of the model doing it.
 | wouldn't execute | 15.9% | 8.0% | 37.3% |
 | seconds per attempt | 3.0 | 3.8 | 2.9 |
 
-**Neither thing we tried closed the gap. Both widened it.** Adding a retry loop widened it a
-little; halving the model widened it a lot. In both cases the capability number moved in the
-direction you'd expect and the reliability number moved *less*, or much worse.
+**Neither thing we tried closed the gap.** Adding a retry loop raised both scores and left the
+gap where it was. Halving the model nearly doubled it — and that increase is well clear of
+noise.
 
-That is the study's actual finding, and it is not the one we set out expecting. The gap between
-what a model can do and what it does dependably is not an artefact that better engineering
-sweeps away. It is a property of the thing, and the only way to know its size for your model on
-your database is to measure it — which is the one thing a single-run benchmark cannot do.
+That is the study's actual finding. In this study, the distance between what a model can do and
+what it does dependably did not yield to the obvious fixes. The only way to know its size for
+your model, on your database, is to measure it — which is the one thing a single-run benchmark
+cannot do.
 
 ---
 
@@ -492,13 +496,20 @@ The middle 95% of those 10,000 averages is the interval quoted earlier: **[+2.4,
 capability and [+1.0, +5.8] for reliability**. Neither interval contains zero, so the
 improvement isn't an artefact of which questions we happened to ask.
 
+The same check matters just as much when it *fails*. Run on the gap itself, setup B's change
+comes out at **[−2.0, +4.0]** — an interval that contains zero. That is why this write-up says
+retrying left the gap about where it was, rather than claiming it made the gap worse. An earlier
+draft did claim that, before this check was run on the gap; the check is now part of the
+comparison script, so the claim can't come back untested. For setup C the same check gives
+**[+5.0, +14.7]**: the smaller model's wider gap is real.
+
 Two details matter. We resample **questions**, not attempts — questions are the independent
 unit here, and resampling attempts within a question would produce an interval far too narrow
 and a confidence nobody has earned. And the comparison is **paired**: each question is compared
 against itself across the two setups, which cancels out the fact that some questions are simply
 harder than others.
 
-**Check 5 — 248 automated tests**, run against Python 3.11, 3.12 and 3.13 on every change,
+**Check 5 — 251 automated tests**, run against Python 3.11, 3.12 and 3.13 on every change,
 including tests against the real databases.
 
 **Check 6 — everything is published.** All 14,940 raw attempts are in the repository: every reply,
@@ -539,11 +550,11 @@ you tested, they worked.
 **What follows from that:**
 
 1. **A single benchmark run tells you the wrong thing.** Test your questions repeatedly or you're
-   measuring luck. Every intervention in this study looked better on a single-run metric than it
-   did on repetition — the 3B by more than double.
+   measuring luck. The smaller model lost more than twice as much reliability as capability —
+   a difference a single run would never show you.
 2. **Error handling is not enough.** Most failures here never raise an error. Catching exceptions
-   catches 16% of the problem, and an agent loop built on those exceptions fixed 5% of the
-   misses it could reach.
+   catches 16% of the problem, and an agent loop built on those exceptions fixed one in six of
+   the crashes it saw — 5% of all wrong answers.
 3. **Measure on your own database.** The gap varied from 0 to 31.4 points across schemas, and a
    database that looked perfectly consistent on one model came apart on another.
 4. **Don't buy a smaller model on its benchmark score.** The 3B gave up 7.5 points of capability
@@ -633,7 +644,7 @@ It also means anyone can reproduce this, which is the difference between a resul
 | **B** — 7B, self-correcting | ✅ Complete. 4,980 attempts published. |
 | **C** — 3B, single attempt | ✅ Complete. 4,980 attempts published. |
 
-248 tests passing. Continuous integration green on Python 3.11, 3.12 and 3.13.
+251 tests passing. Continuous integration green on Python 3.11, 3.12 and 3.13.
 
 Raw results: [`results/final/`](../results/final/) — one file per setup, one line per attempt.
 

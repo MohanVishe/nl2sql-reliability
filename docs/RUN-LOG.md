@@ -141,7 +141,7 @@ Strict scoring: 2,228 matches (44.9%). 3.2% of matches depend on accepting extra
 | attempts that retried | 793 (16.0%) |
 | …ended up executing | 377 (47.5% of those) |
 | …ended up correct | 140 (17.7% of those) |
-| of the misses it could have fixed, it fixed | 5.0% |
+| share of all misses the loop fixed (silent ones included) | 5.0% |
 
 Retries fire on execution failure only, so the loop can never reach an attempt that runs
 cleanly and returns the wrong rows. That is the ceiling, and against arm A it was already low:
@@ -155,7 +155,7 @@ Both arms scored on the same 496 questions, k=10.
 |---|---|---|---|---|
 | pass@k | 49.8% | 54.2% | +4.4 | [+2.4, +6.7] |
 | pass^k | 36.1% | 39.5% | +3.4 | [+1.0, +5.8] |
-| gap | 13.7 | 14.7 | **+1.0** | |
+| gap | 13.7 | 14.7 | +1.0 | [−2.0, +4.0] — includes zero |
 | inconsistent questions | 13.7% | 14.7% | +1.0 | |
 
 Reliability improved on 27 questions and worsened on 10. Cost: 1.28× the time, 1.26 turns
@@ -163,7 +163,9 @@ per attempt, 32% more prompt tokens.
 
 ### Notes
 
-Both estimators rose and the distance between them rose too. The early measurement quoted
+Both estimators rose by amounts clear of zero. The gap between them moved by +1.0, but its
+interval includes zero, so this arm is recorded as leaving the gap unchanged rather than
+widening it. The early measurement quoted
 here before the arm finished — 1.47 turns per attempt at 343 attempts — did not hold: the
 final figure is 1.26, because the retry rate fell as the run moved through databases. The
 early number was taken from the first database alphabetically and was not representative.
@@ -221,7 +223,7 @@ Same family, same questions, half the parameters. k=10, 496 questions.
 |---|---|---|---|---|
 | pass@k | 49.8% | 42.3% | −7.5 | [−11.7, −3.2] |
 | pass^k | 36.1% | 18.8% | **−17.3** | [−21.4, −13.3] |
-| gap | 13.7 | 23.6 | +9.9 | |
+| gap | 13.7 | 23.6 | +9.9 | [+5.0, +14.7] |
 | inconsistent questions | 13.7% | 23.6% | +9.9 | |
 
 Reliability worsened on 102 questions and improved on 16.
