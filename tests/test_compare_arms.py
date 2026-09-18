@@ -121,6 +121,27 @@ class TestEndToEndPrinting:
         # q1 went 2/5 -> 4/5 and q2 was already perfect, so exactly one question improves.
         assert "improved on 1 questions, worsened on 0" in out
 
+    def test_the_gap_gets_its_own_interval(self, capsys):
+        # Both metrics can move while the gap barely does. The gap is the headline, so it
+        # needs its own interval rather than being read off the other two rows.
+        grouped = {
+            "single": spread("single", 1, 5, 2) + spread("single", 2, 5, 5),
+            "agentic": spread("agentic", 1, 5, 4) + spread("agentic", 2, 5, 5),
+        }
+        views, depth = compare_arms.align(grouped, k=2, strict=False)
+        compare_arms.print_differences(views, "single", depth)
+        rows = [
+            line.split()[0] for line in capsys.readouterr().out.splitlines() if "95% CI" in line
+        ]
+        assert rows == ["pass@k", "pass^k", "gap"]
+
+    def test_gap_contribution_is_capability_minus_reliability(self):
+        # 5 of 10 correct at k=2: pass@2 = 1 - C(5,2)/C(10,2) = 7/9, pass^2 = C(5,2)/C(10,2) = 2/9
+        assert compare_arms._gap(10, 5, 2) == pytest.approx(7 / 9 - 2 / 9)
+        # Always right or always wrong contributes nothing to the gap, at any k.
+        assert compare_arms._gap(10, 10, 5) == 0.0
+        assert compare_arms._gap(10, 0, 5) == 0.0
+
     def test_a_missing_baseline_says_so_rather_than_raising(self, capsys):
         grouped = {"a": spread("a", 1, 3, 1), "b": spread("b", 1, 3, 2)}
         views, depth = compare_arms.align(grouped, k=None, strict=False)

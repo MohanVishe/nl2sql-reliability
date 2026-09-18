@@ -148,9 +148,15 @@ def print_differences(views: list[ArmView], baseline: str, k: int) -> None:
         suite = summarize(view.outcomes, k)
         print(f"== {view.name} against {baseline}, k={k}")
 
+        # The gap gets its own interval. It is the study's headline, and it is the difference
+        # of two differences -- a change in it can be well inside noise even when both metrics
+        # moved by amounts that are individually clear of zero. An earlier write-up reported
+        # a gap widening as a finding without ever testing it; this row is why that cannot
+        # happen again.
         for label, value, base_value, getter in (
             ("pass@k", suite.pass_at_k, base_suite.pass_at_k, pass_at_k),
             ("pass^k", suite.pass_hat_k, base_suite.pass_hat_k, pass_hat_k),
+            ("gap", suite.reliability_gap, base_suite.reliability_gap, _gap),
         ):
             paired = []
             for outcome in view.outcomes:
@@ -176,6 +182,11 @@ def print_differences(views: list[ArmView], baseline: str, k: int) -> None:
                 broke += 1
         print(f"   reliability improved on {fixed} questions, worsened on {broke}")
         print()
+
+
+def _gap(attempts: int, correct: int, k: int) -> float:
+    """One question's contribution to the reliability gap, shaped like the estimators."""
+    return pass_at_k(attempts, correct, k) - pass_hat_k(attempts, correct, k)
 
 
 def bootstrap_interval(
