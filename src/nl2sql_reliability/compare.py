@@ -10,8 +10,8 @@ direction or another:
 - Set comparison silently loses duplicate rows, which are meaningful in SQL.
 
 So: rows are compared as a *multiset* (duplicates preserved, order ignored) unless the
-gold query pins an order with ORDER BY, and column order is resolved by searching for a
-column alignment that makes the two agree.
+gold query pins an order with a top-level ORDER BY, and column order is resolved by
+searching for a column alignment that makes the two agree.
 """
 
 from __future__ import annotations
@@ -88,12 +88,38 @@ def order_matters(gold_sql: str) -> bool:
     Without ORDER BY, SQL guarantees no particular row order, so comparing sequences would
     fail correct queries at random. With it, order is part of what was asked for.
 
-    Known limitation: an ORDER BY inside a subquery trips this heuristic, making the
-    comparison stricter than it needs to be. That direction is safe — it can only report a
-    correct query as incorrect, never the reverse — and it is rare enough to accept rather
-    than pull in a SQL parser. Worth revisiting if the failure taxonomy shows it biting.
+    Only a **top-level** ORDER BY counts. One inside a subquery, a CTE or a window's
+    `OVER (...)` decides which rows are picked or how a value is computed, not the order the
+    final rows come back in. Enforcing order there fails correct queries whose rows are right
+    but arrive in an order nobody asked for, and every such false failure reads as flakiness.
+    Literals, quoted identifiers and comments are removed first, so an `order by` inside a
+    string cannot trip it.
     """
-    return bool(_ORDER_BY.search(gold_sql or ""))
+    return bool(_ORDER_BY.search(_top_level(gold_sql or "")))
+
+
+# Quoted text and comments, which may contain parentheses or the words "order by" and must be
+# removed before the query's nesting is read.
+_QUOTED_OR_COMMENT = re.compile(
+    r"'(?:[^']|'')*'"  # string literal, '' escapes
+    r'|"(?:[^"]|"")*"'  # quoted identifier
+    r"|`[^`]*`"  # MySQL-style identifier, which SQLite accepts
+    r"|\[[^\]]*\]"  # bracketed identifier
+    r"|--[^\n]*"  # line comment
+    r"|/\*.*?(?:\*/|$)",  # block comment, possibly unterminated
+    re.DOTALL,
+)
+_INNERMOST_PARENS = re.compile(r"\([^()]*\)")
+
+
+def _top_level(sql: str) -> str:
+    """The query with quoted text, comments and every parenthesised group blanked out."""
+    text = _QUOTED_OR_COMMENT.sub(" ", sql)
+    previous = None
+    while previous != text:
+        previous = text
+        text = _INNERMOST_PARENS.sub(" ", text)
+    return text
 
 
 def _alignments(n_pred: int, k_gold: int) -> Iterable[tuple[int, ...]]:

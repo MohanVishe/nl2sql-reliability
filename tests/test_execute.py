@@ -66,6 +66,27 @@ class TestExecution:
         result = run_query(db, "SELECT 1")
         assert result.elapsed_seconds >= 0
 
+    # SQLite itself accepts all of these and returns no rows. Counted as executed, a failed
+    # extraction would match an empty gold result and never trigger the retry loop.
+    @pytest.mark.parametrize("sql", ["", "   \n", ";", "-- nothing here", "/* none */ ;"])
+    def test_empty_query_is_an_error_not_an_empty_result(self, db, sql):
+        result = run_query(db, sql)
+        assert not result.ok
+        assert "empty query" in result.error
+        assert not result.timed_out
+
+    def test_query_with_a_comment_still_runs(self, db):
+        result = run_query(db, "-- the answer\nSELECT name FROM person WHERE id = 1")
+        assert result.ok
+        assert result.rows == [("alice",)]
+
+    def test_two_statements_are_reported_not_raised(self, db):
+        # 3.11 raises sqlite3.Warning here, which is not an sqlite3.Error; 3.12+ raises
+        # ProgrammingError. Either way the run must record it, not crash.
+        result = run_query(db, "SELECT 1; SELECT 2")
+        assert not result.ok
+        assert result.error
+
 
 class TestReadOnly:
     """Generated SQL is untrusted. A mutation must fail rather than corrupt the benchmark."""
@@ -116,6 +137,16 @@ class TestEndToEnd:
         gold = run_query(db, gold_sql)
         pred = run_query(db, pred_sql)
         assert not compare_result_sets(gold.rows, pred.rows, ordered=order_matters(gold_sql))
+
+    def test_order_inside_a_subquery_does_not_force_row_order(self, db):
+        # The inner ORDER BY ... LIMIT picks which rows; the outer query sets no order.
+        gold_sql = "SELECT name FROM (SELECT name, age FROM person ORDER BY age DESC LIMIT 2)"
+        pred_sql = "SELECT name FROM person WHERE age >= 30 ORDER BY name ASC"
+        gold = run_query(db, gold_sql)
+        pred = run_query(db, pred_sql)
+        assert gold.ok and pred.ok
+        assert sorted(gold.rows) == sorted(pred.rows) and gold.rows != pred.rows
+        assert compare_result_sets(gold.rows, pred.rows, ordered=order_matters(gold_sql))
 
     def test_missing_join_condition_is_caught(self, db):
         gold = run_query(db, "SELECT COUNT(*) FROM person WHERE age = 25")

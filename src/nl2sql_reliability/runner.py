@@ -110,7 +110,8 @@ class Runner:
 
         gold = self.gold(question)
         if not gold.ok:
-            # The answer key itself does not execute. Scoring this would invent a result;
+            # The answer key produced no rows: an error, or (for both excluded questions) the
+            # deadline. Scoring against nothing would invent a result;
             # it is flagged and excluded from the metrics instead.
             return Attempt(
                 **base, match=False, reason=f"gold query failed: {gold.error}", gold_failed=True

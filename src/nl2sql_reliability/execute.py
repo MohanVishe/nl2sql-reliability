@@ -14,6 +14,7 @@ rather than waited on.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -47,6 +48,16 @@ class Execution:
         return len(self.rows)
 
 
+_COMMENT = re.compile(r"--[^\n]*|/\*.*?(?:\*/|$)", re.DOTALL)
+
+
+def is_empty_sql(sql: str | None) -> bool:
+    """True when a string holds no statement: only whitespace, semicolons and comments."""
+    if not sql:
+        return True
+    return not _COMMENT.sub(" ", sql).replace(";", " ").strip()
+
+
 def _connect_readonly(db_path: Path) -> sqlite3.Connection:
     uri = f"file:{db_path.as_posix()}?mode=ro"
     return sqlite3.connect(uri, uri=True, timeout=1.0)
@@ -74,6 +85,12 @@ def run_query(
     if not db_path.exists():
         return Execution(False, [], [], f"database not found: {db_path}", 0.0)
 
+    if is_empty_sql(sql):
+        # SQLite runs an empty or comment-only string without complaint and returns no rows.
+        # Counted as "executed", a failed extraction would match an empty gold result and
+        # would never trigger the retry loop, so it is an execution error instead.
+        return Execution(False, [], [], "empty query: no SQL statement to execute", 0.0)
+
     connection: sqlite3.Connection | None = None
     deadline = started + timeout_seconds
     timed_out = False
@@ -93,7 +110,9 @@ def run_query(
         rows = cursor.fetchmany(max_rows) if max_rows is not None else cursor.fetchall()
         elapsed = time.perf_counter() - started
         return Execution(True, [tuple(r) for r in rows], columns, None, elapsed)
-    except sqlite3.Error as exc:
+    # sqlite3.Warning is not an sqlite3.Error. Python 3.11 raises it for a string holding more
+    # than one statement (3.12+ raises ProgrammingError), and it must not crash a run.
+    except (sqlite3.Error, sqlite3.Warning) as exc:
         elapsed = time.perf_counter() - started
         message = f"query interrupted after {timeout_seconds}s" if timed_out else str(exc)
         return Execution(False, [], [], message, elapsed, timed_out=timed_out)

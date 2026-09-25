@@ -90,6 +90,22 @@ class TestAttempt:
         assert not attempt.match
         assert attempt.sql == ""
 
+    def test_reply_with_no_sql_is_not_counted_as_executed(self, root):
+        # The gold returns no rows. Were an empty query "executed", it would return no rows
+        # too and score as a match.
+        empty_gold = Question(
+            question_id=2,
+            question="Which customers live in Delhi?",
+            evidence="",
+            gold_sql="SELECT name FROM customer WHERE city = 'delhi'",
+            db_id="shop",
+        )
+        generator = StubGenerator(replies=["I cannot help with that."])
+        attempt = Runner(generator, arm="test", root=root).attempt(empty_gold)
+        assert not attempt.executed
+        assert not attempt.match
+        assert attempt.reason == "query failed to execute"
+
     def test_metadata_is_carried_through(self, root, question):
         generator = StubGenerator(replies=[fenced("SELECT COUNT(*) FROM customer")])
         attempt = Runner(generator, arm="local-7b", root=root).attempt(question, run=3)
@@ -182,6 +198,14 @@ class TestAgenticLoop:
         follow_up = generator.calls[1][-1]
         assert follow_up["role"] == "user"
         assert "missing_table" in follow_up["content"]
+
+    def test_a_reply_with_no_sql_triggers_a_repair_turn(self, root, question):
+        generator = StubGenerator(
+            replies=["I cannot help with that.", fenced("SELECT COUNT(*) FROM customer")]
+        )
+        attempt = Runner(generator, arm="test", root=root, max_turns=3).attempt(question)
+        assert attempt.turns == 2
+        assert attempt.match
 
     def test_a_wrong_but_valid_query_is_not_retried(self, root, question):
         # Retrying on a wrong result would require the gold rows. A model steered by the

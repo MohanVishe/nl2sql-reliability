@@ -142,6 +142,40 @@ class TestOrderMattersHeuristic:
     def test_ordered_word_in_identifier_is_not_a_false_positive(self):
         assert not order_matters("SELECT order_by_column FROM orders")
 
+    # An ORDER BY that is not at the top level picks rows or computes a value; it says
+    # nothing about the order of the final result. Enforcing order there fails correct
+    # queries, and each false failure would read as model flakiness.
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT name FROM (SELECT name FROM t ORDER BY age DESC LIMIT 3)",
+            "SELECT a FROM t WHERE id IN (SELECT id FROM u ORDER BY x LIMIT 1)",
+            "SELECT id, RANK() OVER (ORDER BY score DESC) FROM t",
+            "SELECT id, ROW_NUMBER() OVER (PARTITION BY g ORDER BY s) AS r FROM t",
+            "WITH top AS (SELECT * FROM t ORDER BY s LIMIT 5) SELECT name FROM top",
+            "SELECT x FROM t WHERE y = (SELECT MAX(y) FROM (SELECT y FROM t ORDER BY y))",
+            "SELECT name FROM t WHERE note = 'order by date'",
+            'SELECT "order by" FROM t',
+            "SELECT name FROM t -- order by age",
+            "SELECT name FROM t /* ORDER BY age */",
+        ],
+    )
+    def test_order_by_below_the_top_level_does_not_count(self, sql):
+        assert not order_matters(sql)
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT name FROM (SELECT * FROM t ORDER BY a) ORDER BY name",
+            "SELECT id, RANK() OVER (ORDER BY s) AS r FROM t ORDER BY r",
+            "WITH c AS (SELECT * FROM t) SELECT * FROM c ORDER BY x",
+            "SELECT a FROM t WHERE b = 'it''s (odd' ORDER BY a",
+            "SELECT a FROM t UNION SELECT a FROM u ORDER BY a",
+        ],
+    )
+    def test_top_level_order_by_still_counts(self, sql):
+        assert order_matters(sql)
+
 
 class TestNormalization:
     def test_booleans_become_numbers(self):
