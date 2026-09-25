@@ -1,8 +1,8 @@
 """Turn recorded attempts into the tables the write-up quotes.
 
-    uv run python scripts/report.py
-    uv run python scripts/report.py results/local-7b.jsonl --k 5
-    uv run python scripts/report.py results/*.jsonl --by-database
+    uv run python scripts/report.py                     # the published results/final/
+    uv run python scripts/report.py results/local-7b-single.jsonl --k 5   # your own run
+    uv run python scripts/report.py --by-database
 
 Reads only what is on disk. Every figure printed here can be re-derived from the JSONL by
 anyone who doubts it, which is the point of recording every attempt rather than a verdict.
@@ -20,7 +20,9 @@ sys.path.insert(0, str(Path("src").resolve()))
 from nl2sql_reliability.metrics import summarize, sweep  # noqa: E402
 from nl2sql_reliability.runner import Attempt, outcomes, read_attempts  # noqa: E402
 
-DEFAULT_RESULTS = Path("results")
+# The published attempts. A fresh run from scripts/run_arm.py writes to results/<arm>.jsonl
+# instead; pass that path explicitly to report on it.
+DEFAULT_RESULTS = Path("results/final")
 
 
 def arms(attempts: list[Attempt]) -> dict[str, list[Attempt]]:
@@ -82,9 +84,17 @@ def print_failures(name: str, attempts: list[Attempt]) -> None:
     for label, count in buckets.most_common():
         print(f"   {label:<24} {count:>6} {count / total:>7.1%}")
 
-    excluded = len(attempts) - len(scoreable)
+    excluded = [a for a in attempts if a.gold_failed]
     if excluded:
-        print(f"   {'(gold unrunnable)':<24} {excluded:>6}  excluded from all figures")
+        # Say why. "Unrunnable" would be wrong for a reference query that runs but takes
+        # longer than the deadline, which is what happened to both excluded questions.
+        timed_out = all("interrupted" in a.reason for a in excluded)
+        label = "(reference timed out)" if timed_out else "(reference query failed)"
+        questions = len({a.question_id for a in excluded})
+        print(
+            f"   {label:<24} {len(excluded):>6}  excluded from all figures "
+            f"({questions} question{'s' if questions != 1 else ''})"
+        )
     print()
 
 
@@ -213,7 +223,7 @@ def print_cost(name: str, attempts: list[Attempt]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("paths", nargs="*", help="results files (default: everything in results/)")
+    parser.add_argument("paths", nargs="*", help="results files (default: results/final/*.jsonl)")
     parser.add_argument(
         "--k", type=int, default=None, help="cap the sweep, and set k for --by-database"
     )

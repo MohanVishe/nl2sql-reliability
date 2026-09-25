@@ -3,14 +3,14 @@
     # a pilot, to check the wiring before committing a night to it
     uv run python scripts/run_arm.py --arm pilot --questions 20 --k 5
 
-    # the single-shot local arm
-    uv run python scripts/run_arm.py --arm local-7b --questions 150 --k 10
-
-    # the same model given its own error message and a second chance
-    uv run python scripts/run_arm.py --arm local-7b-agentic --questions 150 --k 10 --max-turns 3
+    # the three published arms, on all 498 questions
+    uv run python scripts/run_arm.py --arm local-7b-single  --k 10
+    uv run python scripts/run_arm.py --arm local-7b-agentic --k 10 --max-turns 3
+    uv run python scripts/run_arm.py --arm local-3b-single  --k 10 --model qwen2.5-coder:3b
 
 Re-running the same command after a crash resumes where it stopped. Results append to
-`results/<arm>.jsonl`; `scripts/report.py` turns them into the pass@k / pass^k table.
+`results/<arm>.jsonl`; `scripts/report.py results/<arm>.jsonl` turns them into the pass@k /
+pass^k table.
 """
 
 from __future__ import annotations
@@ -60,6 +60,11 @@ def main() -> int:
         help="1 is single-shot; higher lets the model see its own execution error",
     )
     parser.add_argument("--out", default=None, help="results file (default results/<arm>.jsonl)")
+    parser.add_argument(
+        "--allow-greedy",
+        action="store_true",
+        help="permit --temperature 0, to measure how deterministic greedy decoding really is",
+    )
     parser.add_argument("--no-resume", action="store_true")
     parser.add_argument("--every", type=int, default=10, help="progress line interval")
     args = parser.parse_args()
@@ -82,11 +87,13 @@ def main() -> int:
         )
         return 1
 
-    if args.temperature <= 0:
-        # Every attempt would be near-identical, pass@k would equal pass^k, and the study
-        # would report a gap of zero that says nothing about the model.
+    if args.temperature <= 0 and not args.allow_greedy:
+        # The published arms sample at 0.2 by design: the study measures the spread of a
+        # sampled model. Whether greedy decoding is deterministic in practice on a local GPU
+        # has not been measured here; it is the next arm, and it has to be asked for.
         print(
-            "error: --temperature 0 makes repetitions identical; pass^k would be meaningless.",
+            "error: --temperature 0 is a separate experiment (greedy decoding). "
+            "Pass --allow-greedy to run it deliberately.",
             file=sys.stderr,
         )
         return 1

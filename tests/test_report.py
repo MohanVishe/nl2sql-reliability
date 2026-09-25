@@ -84,3 +84,48 @@ class TestPrintRetries:
         ]
         report.print_retries("agentic", attempts)
         assert "attempts that retried        1  100.0%" in capsys.readouterr().out
+
+
+class TestExclusions:
+    def test_a_timed_out_reference_is_labelled_as_a_timeout(self, capsys):
+        attempts = [
+            attempt(match=True, executed=True, run=0),
+            Attempt(
+                arm="agentic",
+                question_id=2,
+                db_id="x",
+                run=0,
+                match=False,
+                reason="gold query failed: query interrupted after 30.0s",
+                gold_failed=True,
+            ),
+        ]
+        report.print_failures("agentic", attempts)
+        out = capsys.readouterr().out
+        assert "(reference timed out)" in out
+        assert "(1 question)" in out
+        assert "unrunnable" not in out
+
+    def test_any_other_reference_failure_is_labelled_as_a_failure(self, capsys):
+        attempts = [
+            attempt(match=True, executed=True, run=0),
+            Attempt(
+                arm="agentic",
+                question_id=2,
+                db_id="x",
+                run=0,
+                match=False,
+                reason="gold query failed: no such table: t",
+                gold_failed=True,
+            ),
+        ]
+        report.print_failures("agentic", attempts)
+        assert "(reference query failed)" in capsys.readouterr().out
+
+
+class TestDefaultPath:
+    def test_the_documented_command_finds_the_published_results(self):
+        # `uv run python scripts/report.py` with no arguments must work on a fresh clone,
+        # where the only results are the committed ones in results/final/.
+        assert report.DEFAULT_RESULTS.as_posix() == "results/final"
+        assert sorted(report.DEFAULT_RESULTS.glob("*.jsonl")), "no committed results found"
