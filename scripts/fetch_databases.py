@@ -1,12 +1,13 @@
 """Download and extract the BIRD dev databases.
 
 The 498 questions run against 11 SQLite databases from BIRD's development set. They are not
-vendored: the archive is ~330 MB and belongs to the BIRD authors.
+vendored: the archive is ~346 MB and belongs to the BIRD authors (CC BY-SA 4.0).
 
 Two sources are tried in order. The official Aliyun OSS endpoint is canonical but measured
 at roughly 34 KB/s from outside China on 2026-09-16 — around two hours — so a Hugging Face
 mirror of the same archive is preferred, measured at roughly 880 KB/s. The official source
-remains the fallback so this still works if the mirror disappears.
+remains the fallback so this still works if the mirror disappears. Either way, every
+database is checked against the sha256 the published results were scored against.
 
     uv run python scripts/fetch_databases.py
     uv run python scripts/fetch_databases.py --force
@@ -36,7 +37,11 @@ class Source:
 SOURCES = (
     Source(
         name="Hugging Face mirror (nlile/BIRD-bench)",
-        url="https://huggingface.co/datasets/nlile/BIRD-bench/resolve/main/dev_databases.zip",
+        # Pinned to the revision the published results used, not to `main`.
+        url=(
+            "https://huggingface.co/datasets/nlile/BIRD-bench/resolve/"
+            "3b94f13f89dca39d3663a89bc3cd22f94b517ddc/dev_databases.zip"
+        ),
         archive="dev_databases.zip",
     ),
     Source(
@@ -87,6 +92,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="re-download even if present")
     parser.add_argument("--keep-archive", action="store_true", help="do not delete the zip")
+    parser.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="accept databases whose sha256 differs from the ones the results used",
+    )
     args = parser.parse_args()
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -94,12 +104,18 @@ def main() -> int:
     # Imported here so the script still runs its download step if the package is not yet
     # installed in the current environment.
     sys.path.insert(0, str(Path("src").resolve()))
-    from nl2sql_reliability.db import available, clear_cache
+    from nl2sql_reliability.db import available, clear_cache, verify_databases
 
     clear_cache()
     existing = available(DATA_DIR)
     if len(existing) >= EXPECTED_DATABASES and not args.force:
         print(f"{len(existing)} databases already present in {DATA_DIR}/. Use --force to refetch.")
+        problems = verify_databases(DATA_DIR)
+        for db_id, problem in sorted(problems.items()):
+            print(f"  differs from the published run: {db_id:<24} {problem}")
+        if problems and not args.no_verify:
+            return 1
+        print("All match the pinned sha256 checksums." if not problems else "")
         return 0
 
     last_error: Exception | None = None
@@ -132,6 +148,19 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
+
+    problems = verify_databases(DATA_DIR)
+    if problems:
+        print()
+        print("These databases differ from the ones the published results used:")
+        for db_id, problem in sorted(problems.items()):
+            print(f"  {db_id:<28} {problem}")
+        if not args.no_verify:
+            print("Refusing. Pass --no-verify to use them anyway.", file=sys.stderr)
+            return 1
+    else:
+        print()
+        print(f"All {len(found)} databases match the pinned sha256 checksums.")
 
     total = sum(p.stat().st_size for p in found.values())
     print(f"\nTotal: {total / 1e9:.2f} GB in {DATA_DIR}/ (gitignored)")

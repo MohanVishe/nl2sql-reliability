@@ -136,3 +136,48 @@ class TestRealDataset:
         assert len(questions) == EXPECTED_ITEMS
         assert len({q.db_id for q in questions}) == EXPECTED_DATABASES
         assert all(q.gold_sql.strip() for q in questions)
+
+
+class TestPinnedDataset:
+    """The answer key is pinned by commit and hash, so a changed file cannot slip in."""
+
+    def test_url_is_pinned_to_a_commit_not_a_branch(self):
+        from nl2sql_reliability.dataset import SOURCE_COMMIT, SOURCE_URL
+
+        assert "/main/" not in SOURCE_URL
+        assert SOURCE_COMMIT in SOURCE_URL and len(SOURCE_COMMIT) == 40
+
+    def test_a_changed_file_is_refused(self, tmp_path):
+        from nl2sql_reliability.dataset import load
+
+        cache = tmp_path / "arcwise.json"
+        cache.write_text(
+            '[{"question_id": "1", "question": "q", "evidence": "", "SQL": "SELECT 1",'
+            ' "db_id": "x"}]',
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="does not match the pinned dataset"):
+            load(cache)
+
+    def test_the_hash_check_can_be_skipped_deliberately(self, tmp_path):
+        from nl2sql_reliability.dataset import load
+
+        cache = tmp_path / "arcwise.json"
+        cache.write_text(
+            '[{"question_id": "1", "question": "q", "evidence": "", "SQL": "SELECT 1",'
+            ' "db_id": "x"}]',
+            encoding="utf-8",
+        )
+        assert len(load(cache, verify=False)) == 1
+
+
+@pytest.mark.databases
+class TestLocalDatasetCopy:
+    def test_local_copy_matches_the_pin(self):
+        from nl2sql_reliability.dataset import DEFAULT_CACHE, EXPECTED_SHA256
+
+        if not DEFAULT_CACHE.exists():
+            pytest.skip("dataset not downloaded")
+        import hashlib
+
+        assert hashlib.sha256(DEFAULT_CACHE.read_bytes()).hexdigest() == EXPECTED_SHA256

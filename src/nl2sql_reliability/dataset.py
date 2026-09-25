@@ -17,16 +17,23 @@ fetched on demand so this repo's own licence stays uncomplicated.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import urllib.request
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+# Pinned to the upstream commit the published results were produced from ("more
+# corrections", 2026-08-27), not to `main`: the file on `main` has changed before and will
+# again, and a moving answer key would make every published number irreproducible.
+SOURCE_COMMIT = "b83d8a899c3e0a771feccfa9ae0ece89885f2898"
 SOURCE_URL = (
     "https://raw.githubusercontent.com/uiuc-kang-lab/text_to_sql_benchmarks/"
-    "main/data/arcwise_plat_sql_only_with_diff.json"
+    f"{SOURCE_COMMIT}/data/arcwise_plat_sql_only_with_diff.json"
 )
+# sha256 of that file, which is byte-identical to the copy the runs used (checked 2026-09-26).
+EXPECTED_SHA256 = "e7bf76408f99266506ea558d84982c69422e5db3dfecab5f08a3a8d3900e8395"
 
 # Verified by download on 2026-09-16. A change here means the upstream dataset moved and
 # every published number would need re-running, so it is asserted rather than assumed.
@@ -87,11 +94,18 @@ def load(cache_path: Path = DEFAULT_CACHE, *, verify: bool = True) -> list[Quest
     """Load the dataset, fetching it first if needed.
 
     Args:
-        verify: assert the expected item and database counts. Leave on — silently running a
-            study against a changed dataset is how unreproducible numbers get published.
+        verify: assert the file's sha256 and the expected item and database counts. Leave
+            on — silently running a study against a changed dataset is how unreproducible
+            numbers get published.
     """
     path = fetch(cache_path)
-    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    payload = Path(path).read_bytes()
+    if verify and hashlib.sha256(payload).hexdigest() != EXPECTED_SHA256:
+        raise ValueError(
+            f"{path} does not match the pinned dataset (sha256 {EXPECTED_SHA256[:12]}...). "
+            "Delete it to re-download, or pass verify=False to use it anyway."
+        )
+    raw = json.loads(payload.decode("utf-8"))
     questions = [Question.from_raw(item) for item in raw]
 
     if verify:

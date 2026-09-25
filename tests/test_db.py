@@ -173,3 +173,28 @@ class TestSchemaSize:
         text = schema_for("shop", bird_like)
         assert len(text) < 1000
         assert dbmod.DEFAULT_ROOT.name == "data"
+
+
+@pytest.mark.databases
+def test_local_databases_match_the_pinned_checksums():
+    from nl2sql_reliability.db import DEFAULT_ROOT, available, clear_cache, verify_databases
+
+    clear_cache()
+    if not available(DEFAULT_ROOT):
+        pytest.skip("BIRD databases not downloaded")
+    assert verify_databases(DEFAULT_ROOT) == {}
+
+
+def test_a_changed_database_is_reported(tmp_path):
+    import sqlite3
+
+    from nl2sql_reliability.db import clear_cache, verify_databases
+
+    folder = tmp_path / "dev_databases" / "superhero"
+    folder.mkdir(parents=True)
+    sqlite3.connect(folder / "superhero.sqlite").close()
+    clear_cache()
+    problems = verify_databases(tmp_path)
+    clear_cache()
+    assert problems["superhero"].startswith("sha256")
+    assert problems["formula_1"] == "missing"

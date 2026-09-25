@@ -11,6 +11,7 @@ says it could not: the first looks like model failure, the second looks like wha
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from dataclasses import dataclass
 from functools import lru_cache
@@ -21,6 +22,48 @@ DEFAULT_ROOT = Path("data")
 # SQLite's own bookkeeping tables. Showing them to a model wastes context and invites
 # queries against tables that are not part of the question.
 _INTERNAL_PREFIXES = ("sqlite_",)
+
+
+# sha256 of each BIRD dev database the published results were scored against, taken from the
+# local copy on 2026-09-26 (unmodified since download: every connection is read-only). That
+# copy came from the Hugging Face mirror nlile/BIRD-bench at revision 3b94f13f89dc, whose
+# dev_databases.zip has LFS sha256 8132aacfe61ecec7...3f317d8f. BIRD's databases are CC BY-SA 4.0.
+DATABASE_SHA256 = {
+    "california_schools": "986817d793479801ed55133e55aa27e335422c0cd3866b54a3d6317b7c5f09c1",
+    "card_games": "c98bdb57fe7474da798b407785544b9af0daaad5d61fd21e2a73309493bc1227",
+    "codebase_community": "92101be6d2a9f6adceea59d38f6d1c556087f9eea1432432a21268cb1348036d",
+    "debit_card_specializing": "b3d149ad05746dbbe5116e229e17e18f09c39db43cf117d9ef3441753608b691",
+    "european_football_2": "e4d361dbeec6591a4b315877c0c481da05c8ff5a3d389b34d6e17b6f15bee4e0",
+    "financial": "d15d89cdb068a202b6f2b99342af44dffc1d52545b39ceaf62efdc0ba570101e",
+    "formula_1": "17185981cd747f6cdc374cb02a6096db3130e6ec2ddc582fe1686a28fb4c4c8a",
+    "student_club": "eb89bcfe97eefa386a27904ec5aa15159811a7eac894ec659a36e48fa9f76b77",
+    "superhero": "75e94a2c3236ee3bb2c01fb97a1c4b4c1c269bcefd4eab1d04be323d2d0825b1",
+    "thrombosis_prediction": "e7e16d74b4731b4b8d33fdbe8c29cd5622620788ce8d1f335631f65fc7cf1db9",
+    "toxicology": "f5fa7f21af1ad878ff8fef1b0582b8cb2d7ed63dbac65ff16d2ba05667650c5b",
+}
+
+
+def verify_databases(root: Path | str = DEFAULT_ROOT) -> dict[str, str]:
+    """Check every expected database against its pinned sha256.
+
+    Returns {db_id: problem} for each one that is missing or differs; empty means all match.
+    A database that changed under a fixed answer key changes the gold rows, and with them
+    every score.
+    """
+    index = _index(str(root))
+    problems: dict[str, str] = {}
+    for db_id, expected in DATABASE_SHA256.items():
+        path = index.get(db_id)
+        if path is None:
+            problems[db_id] = "missing"
+            continue
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            while chunk := handle.read(1 << 20):
+                digest.update(chunk)
+        if digest.hexdigest() != expected:
+            problems[db_id] = f"sha256 {digest.hexdigest()[:12]}..., expected {expected[:12]}..."
+    return problems
 
 
 class DatabaseNotFound(FileNotFoundError):
