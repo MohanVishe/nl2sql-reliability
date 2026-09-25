@@ -1,0 +1,54 @@
+cff-version: 1.2.0
+message: "If you use this study, its harness or its published attempts, please cite it as below."
+type: software
+title: "nl2sql-reliability: pass@k versus pass^k for text-to-SQL on an expert-corrected answer key"
+abstract: >-
+  Asks every question of Arcwise-Plat-SQL (expert-corrected BIRD Mini-Dev) ten times per model
+  and compares capability (pass@k) with reliability (pass^k). 14,880 scored generations from
+  Qwen2.5-Coder 7B and 3B at temperature 0.2, with every attempt published.
+authors:
+  - family-names: Vishe
+    given-names: Mohan Prakash
+repository-code: "https://github.com/MohanVishe/nl2sql-reliability"
+license: MIT
+version: 0.1.0
+date-released: 2026-09-18
+keywords:
+  - text-to-sql
+  - nl2sql
+  - evaluation
+  - reliability
+  - pass^k
+references:
+  - type: article
+    title: "Can LLM Already Serve as A Database Interface? A BIg Bench for Large-Scale Database Grounded Text-to-SQLs"
+    authors:
+      - family-names: Li
+        given-names: Jinyang
+      - name: "et al."
+    journal: "Advances in Neural Information Processing Systems"
+    volume: 36
+    year: 2023
+    identifiers:
+      - type: other
+        value: "arXiv:2305.03111"
+  - type: article
+    title: "Pervasive Annotation Errors Break Text-to-SQL Benchmarks and Leaderboards"
+    authors:
+      - family-names: Jin
+        given-names: Tengjun
+      - name: "et al."
+    year: 2026
+    identifiers:
+      - type: other
+        value: "arXiv:2601.08778"
+  - type: article
+    title: "τ-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains"
+    authors:
+      - family-names: Yao
+        given-names: Shunyu
+      - name: "et al."
+    year: 2024
+    identifiers:
+      - type: other
+        value: "arXiv:2406.12045"

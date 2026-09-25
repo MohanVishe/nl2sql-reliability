@@ -28,16 +28,17 @@ shorter read.
 **What we are doing.** Asking an AI the same database question ten times and checking whether it
 gives the same correct answer every time.
 
-**Why.** Public scoreboards usually ask each question *once*. AI models are random — the same question
-can produce different answers. So the published scores describe a best case, not what you get in
-production.
+**Why.** Most public scoreboards ask each question *once*. AI models, as usually run, have
+randomness built in — the same question can produce different answers. So a published score
+describes one draw, not what you get when the same question comes back again and again.
 
-**What we found.** The model looks ~50% capable, but it is only ~36% *reliable*. Over a
+**What we found.** Sampled at a low randomness setting (temperature 0.2), the model looks ~50%
+capable, but it is only ~36% *reliable*. Over a
 quarter of its apparent ability does not survive repetition. And the failures are mostly silent
 — queries that run perfectly and return the wrong data.
 
 **Neither obvious fix closed that gap.** Letting the model read its own error and retry (an
-"AI agent") raised both numbers but left the gap where it was. Halving the model's size made it
+"AI agent") raised both numbers but made no detectable change to the gap. Halving the model's size made it
 much worse: 7.5 points of capability lost, and **17.3 points of reliability** — more than twice
 as much.
 
@@ -71,9 +72,9 @@ your AI at them, count how many it gets right, and publish the percentage. Good 
 
 ### The hole in that measurement
 
-**Those scores come from asking each question once.**
+**Most leaderboard scores come from asking each question once.**
 
-AI language models are not deterministic. They pick each word using probabilities, so the same
+AI language models, as usually run, are not deterministic. They pick each word using probabilities, so the same
 question asked twice can produce two different answers. That's not a defect — it's how they
 work, and it's what lets them be creative.
 
@@ -172,7 +173,7 @@ Suppose you ask the same question 10 times and get 5 right.
 right at least once, they are *capable* of the work. If they get it right all ten times, they
 are *reliable*. You would not put someone in the first group in charge of production.
 
-The industry publishes the first number and lets readers assume the second.
+Most leaderboards publish the first number and leave readers to assume the second.
 
 **The distance between them is what this project measures.**
 
@@ -201,14 +202,21 @@ different and useless number. A model that reliably produces the "wrong" answer 
 match a bad label would score as highly reliable.
 
 So this study uses **Arcwise-Plat-SQL**: 498 of those questions across 11 databases, with the
-correct answers rewritten by database experts. It's downloaded when you run the code, not copied
+reference SQL rewritten by database experts. It's downloaded when you run the code, not copied
 into this repository, because its licence belongs to its authors.
+
+One thing this version deliberately leaves alone: the questions themselves. It fixes the SQL
+only and keeps each question and hint as originally written, ambiguities included. So when a
+question can fairly be read two ways, a model that switches between the readings is scored as
+inconsistent. How much of the gap that explains isn't measured yet; the authors also publish a
+fully corrected version with the same questions, and rerunning on it is next.
 
 ---
 
 ## 6. What we are testing
 
-Three runs of the same 498 questions, each repeated 10 times — about 15,000 generated queries.
+Three runs of the same questions, each repeated 10 times: 14,880 scored generations (14,940
+records; 2 of the 498 questions are excluded, see §9).
 
 | # | Setup | The question it answers |
 |---|---|---|
@@ -229,26 +237,29 @@ real finding.
 
 **Why C is interesting.** If the 3B model shows a *similar* gap to the 7B, then reliability isn't
 something you buy by scaling up, and that changes how you'd build a product. Both are from the
-same model family, so the comparison isolates size rather than confounding it with different
-training data.
+same family and use the same 4-bit compression, so training data is held fixed. The compression
+may cost the smaller model more, so size and compression are not fully separated.
 
 ### The settings, and why we picked them
 
 An AI model has a few dials. Here is where each one was set, in plain terms.
 
 - **Temperature: 0.2.** Temperature is the "randomness" dial. At 0 the model always picks its
-  single most likely next word, so asking ten times gives the same answer ten times and there is
-  nothing to measure. Higher numbers mean more variety. 0.2 is **low and cautious**, the kind of
-  setting a team would pick for writing SQL, so the gap isn't caused by turning the randomness
-  up unusually high.
-- **No fixed "seed".** A seed makes the randomness repeat exactly. Fixing one would make all ten
-  tries identical, which defeats the point.
+  single most likely next word, which is usually expected to give the same answer every time —
+  though that wasn't tested here. Higher numbers mean more variety. This study measures how much
+  a *sampled* model varies, so it uses 0.2: **low and cautious**, the kind of setting a team
+  would pick for writing SQL, so the gap isn't caused by turning the randomness up unusually high.
+- **No fixed "seed".** A seed makes the randomness repeat exactly. One seed shared by all ten
+  tries would make them identical; a different seed per try would keep them different *and*
+  make each one replayable. None was set this time, so a single try can't be replayed. Next runs
+  will set one per try.
 - **Ten tries per question.** The gap keeps growing the more times you ask (§8 shows it at 2
   tries vs 10), so a small number of tries understates it. Ten was affordable: about 4–5 hours
   per setup on one home GPU.
 - **Qwen2.5-Coder, 7B and 3B.** A strong free model built for code, and the biggest version that
-  fits on an 8 GB graphics card. The 3B is from the same family, so the only real difference is
-  size.
+  fits on an 8 GB graphics card. The 3B is from the same family and has the same 4-bit
+  compression, so the main difference is size. (The 7B is Apache 2.0; the 3B is under Qwen's
+  research licence.)
 - **4-bit compression.** The full-size 7B model needs about 14 GB of memory; the compressed
   version needs about 4.7 GB. That's what made a home GPU enough.
 - **Room to read: 8,192 tokens.** The model must see the whole database structure. The longest
@@ -261,7 +272,8 @@ An AI model has a few dials. Here is where each one was set, in plain terms.
 - **30-second limit per query**, and **read-only databases.** AI-written SQL can't be trusted:
   one runaway query shouldn't stall the run, and one accidental "delete" shouldn't wreck it.
 
-What we didn't test: temperature 0, and higher temperatures. Both are fair next questions.
+What we didn't test: temperature 0, and higher temperatures. Next: a temperature-0 run on the
+7B, to measure how identical "identical" really is.
 
 ---
 
@@ -289,7 +301,8 @@ noise as model unreliability. So we run both queries and compare what comes back
 | Rule | Why it has to be this way |
 |---|---|
 | Rows compared as a multiset | Set comparison silently drops duplicate rows, which mean something in SQL |
-| Row order ignored unless the correct query sorts | Without `ORDER BY`, SQL promises no particular order |
+| Row order ignored unless the correct query sorts its final result | Without `ORDER BY`, SQL promises no particular order. A sort inside a sub-query picks rows; it doesn't order the answer |
+| An empty query counts as an error | The database happily "runs" nothing and returns no rows, which must not pass for an answer |
 | Column order resolved by searching alignments | The question never specified column order |
 | `1` and `1.0` treated as equal | SQLite is loosely typed; how a number is stored isn't what it means |
 | Queries run **read-only**, with a time limit | Generated SQL is untrusted. One hallucinated `DROP TABLE` would corrupt the benchmark for every later run |
@@ -298,30 +311,30 @@ noise as model unreliability. So we run both queries and compare what comes back
 
 ## 8. What we found
 
-**All three setups are complete: 14,940 attempts, 498 questions, 10 repetitions each, 13.4
-hours of computation.** Models: Qwen2.5-Coder at 7B and 3B, compressed to 4-bit, running
+**All three setups are complete: 14,880 scored attempts on 496 questions (of 498), 10
+repetitions each, 13.4 hours of computation, at temperature 0.2.** Models: Qwen2.5-Coder at 7B and 3B, compressed to 4-bit, running
 locally.
 
 ### The headline
 
 | k (attempts) | pass@k — *can* it? | pass^k — *does it always*? | gap |
 |---|---|---|---|
-| 1 | 42.9% | 42.9% | 0.0 |
-| 2 | 45.5% | 40.4% | 5.1 |
-| 5 | 48.2% | 37.7% | 10.6 |
-| **10** | **49.8%** | **36.1%** | **13.7** |
+| 1 | 43.0% | 43.0% | 0.0 |
+| 2 | 45.6% | 40.4% | 5.3 |
+| 5 | 48.4% | 37.7% | 10.8 |
+| **10** | **50.0%** | **36.1%** | **13.9** |
 
-Read the bottom row like this: across 498 questions, asking each one ten times —
+Read the bottom row like this: across 496 questions, asking each one ten times —
 
-- **49.8%** had at least one correct answer among the ten. That's what capability looks like.
+- **50.0%** had at least one correct answer among the ten. That's what capability looks like.
 - **36.1%** were correct on all ten. That's what you can actually depend on.
-- The **13.7 point** difference is questions the model got right *sometimes*.
+- The **13.9 point** difference is questions the model got right *sometimes*.
 
 **More than a quarter of its apparent capability doesn't survive being asked ten times.**
 
-<p align="center"><img src="img/gap-by-tries.svg" alt="Chart: for the 7B model, asked once, both measures are 42.9%. Asked twice: 45.5% versus 40.4%. Asked ten times: 49.8% versus 36.1%, a gap of 13.7 points." width="760"></p>
+<p align="center"><img src="img/gap-by-tries.svg" alt="Chart: for the 7B model, asked once, both measures are 43.0%. Asked twice: 45.6% versus 40.4%. Asked ten times: 50.0% versus 36.1%, a gap of 13.9 points." width="760"></p>
 
-Notice the gap *grows* with k — 5.1 at two attempts, 13.7 at ten. That is the expected shape:
+Notice the gap *grows* with k — 5.3 at two attempts, 13.9 at ten. That is the expected shape:
 every extra repetition is another chance to catch an inconsistency. It also means a study that
 stops at k=2 or k=3 (as a metered API budget would force) substantially understates the problem.
 
@@ -331,19 +344,19 @@ This is the table that changes how you'd build something.
 
 | What happened | Count | Share |
 |---|---|---|
-| Correct | 2,130 | 42.9% |
-| **Ran fine, returned wrong rows** | **2,030** | **40.9%** |
+| Correct | 2,134 | 43.0% |
+| **Ran fine, returned rows that didn't match the reference** | **2,026** | **40.8%** |
 | SQL wouldn't execute | 790 | 15.9% |
 | Query timed out | 10 | 0.2% |
 
 Only **16%** of attempts failed loudly — a syntax error, a missing column, something a program
 can detect and handle.
 
-**41% of all attempts produced SQL that executed perfectly and returned the wrong answer.** No
-error. No warning. Nothing for a pipeline to catch. Those are the dangerous ones, and they
-outnumber the catchable failures roughly 2.6 to 1.
+**41% of all attempts produced SQL that executed perfectly and returned rows that didn't match
+the reference answer.** No error. No warning. Nothing for a pipeline to catch. Those are the
+dangerous ones, and they outnumber the catchable failures about 2.5 to 1.
 
-<p align="center"><img src="img/failures.svg" alt="Chart: for the 7B model, 43% of attempts were correct, 41% ran without error but gave the wrong answer, and 16% crashed. With retries: 46%, 45%, 8%. The 3B model: 30%, 33%, 38%." width="760"></p>
+<p align="center"><img src="img/failures.svg" alt="Chart: for the 7B model, 43% of attempts were correct, 41% ran without error but returned rows that did not match the reference, and 16% crashed. With retries: 47%, 45%, 8%. The 3B model: 30%, 33%, 37%." width="760"></p>
 
 The same split for all three setups. For the 3B model the crashes (grey) are the biggest
 share, but the silent wrong answers (red) are still a third of everything it produced.
@@ -356,11 +369,16 @@ attempt rather than picking one quietly.
 
 | Scoring | Matches | Share |
 |---|---|---|
-| Lenient (extra columns allowed) | 2,130 | 42.9% |
-| Strict (exact columns only) | 2,076 | 41.9% |
+| Lenient (extra columns allowed) | 2,134 | 43.0% |
+| Strict (exact columns only) | 2,080 | 41.9% |
 
 Only **2.5%** of matches depend on the lenient reading. The headline is essentially unchanged
 either way, so the most obvious objection to this kind of study doesn't apply here.
+
+The scorer is also stricter than the benchmark's own official one, which compares the rows as a
+plain set (duplicates and order ignored). Scored that way, single-try accuracy is 46.5% rather
+than 43.0% and the gap is 14.3 rather than 13.9 — the numbers shift, the conclusions don't. The
+full comparison is in [METHOD](METHOD.md#robustness-bird-official-scoring).
 
 ### Reliability depends on the database
 
@@ -370,8 +388,8 @@ either way, so the most obvious objection to this kind of study doesn't apply he
 | codebase_community | 54.2% | 33.3% | 20.8 |
 | toxicology | 32.5% | 12.5% | 20.0 |
 | thrombosis_prediction | 46.0% | 26.0% | 20.0 |
+| superhero | 73.1% | 57.7% | 15.4 |
 | card_games | 47.1% | 33.3% | 13.7 |
-| superhero | 71.2% | 57.7% | 13.5 |
 | european_football_2 | 54.9% | 45.1% | 9.8 |
 | financial | 33.3% | 26.7% | 6.7 |
 | student_club | 62.5% | 56.2% | 6.2 |
@@ -396,31 +414,31 @@ what it actually did.
 
 | k | pass@k — *can* it? | pass^k — *does it always*? | gap |
 |---|---|---|---|
-| 1 | 46.4% | 46.4% | 0.0 |
-| 5 | 52.2% | 40.9% | 11.3 |
-| **10** | **54.2%** | **39.5%** | **14.7** |
+| 1 | 46.6% | 46.6% | 0.0 |
+| 5 | 52.4% | 41.1% | 11.3 |
+| **10** | **54.4%** | **39.7%** | **14.7** |
 
 Side by side with setup A:
 
 | | A: one shot | B: retry on error | change |
 |---|---|---|---|
-| pass@10 (capability) | 49.8% | 54.2% | **+4.4** |
-| pass^10 (reliability) | 36.1% | 39.5% | **+3.4** |
-| **the gap** | **13.7** | **14.7** | +1.0 *(within noise)* |
-| questions it's inconsistent on | 13.7% | 14.7% | +1.0 |
+| pass@10 (capability) | 50.0% | 54.4% | **+4.4** |
+| pass^10 (reliability) | 36.1% | 39.7% | **+3.6** |
+| **the gap** | **13.9** | **14.7** | +0.8 *(within noise)* |
+| questions it's inconsistent on | 13.9% | 14.7% | +0.8 |
 | time per attempt | 3.0 s | 3.8 s | 1.28× |
 
 **Both numbers went up. The gap between them didn't close.**
 
 Retrying genuinely helps — both improvements are real, not noise (see §9 for how we checked).
-But look at the gap row. It moved from 13.7 to 14.7, and that one-point change is **within
-noise**: re-running the same check on the gap itself, it could plausibly be anywhere from 2
-points narrower to 4 points wider. So we don't claim retrying made the gap worse. We claim
-something simpler: it made the model somewhat better across the board, and did nothing about its
-inconsistency. The questions it answered only sometimes, it still answers only sometimes.
+But look at the gap row. It moved from 13.9 to 14.7, and that 0.8-point change is **within
+noise**: re-running the same check on the gap itself, it could plausibly be anywhere from 2.2
+points narrower to 3.8 points wider. So we don't claim retrying made the gap worse, and we don't
+claim it left the gap exactly the same either. We claim something simpler: it made the model
+somewhat better across the board, with no detectable change in its inconsistency.
 
 For anything running unattended, that is the part that matters. A retry loop can raise your
-average and leave every intermittent failure exactly as intermittent as it was.
+average and leave intermittent failures intermittent.
 
 ### Why the retry loop can't do much
 
@@ -434,47 +452,53 @@ So its reach is capped in advance, and we can measure exactly how capped:
 |---|---|---|
 | Attempts that triggered a retry | 793 | 16% of all attempts |
 | …that ended up running at all | 377 | 48% of those |
-| …that ended up **correct** | 140 | **18% of those** |
-| Share of *all* wrong answers the loop fixed | 140 of 2,799 | **5.0%** |
+| …that ended up **correct** | 145 | **18% of those** |
+| Share of *all* wrong answers the loop fixed | 145 of 2,794 | **5.2%** |
 
 Read the last two rows carefully, because they answer different questions. Of the failures the
-loop could actually see — the crashes — it turned about **one in six** into a right answer. But
+loop could actually see — the crashes — it turned a little under **one in five** into a right
+answer. But
 most failures were never crashes, so counted against *every* wrong answer, it fixed about **one
 in twenty**. And note the middle row: more than half the time, the model reads its own error
 message and still produces something that won't run.
 
 There's a cost on the other side too. Compared question by question, setup B's reliability
-improved on 27 questions and **got worse on 10**. A second turn sometimes talks the model out
+improved on 28 questions and **got worse on 10**. A second turn sometimes talks the model out
 of a query that was already right.
 
 **The practical takeaway:** an agent loop built on error messages can only address the failures
 that announce themselves. In this study those were the minority — and the silent failures,
-which are the ones that actually hurt, went *up* (40.9% → 45.2% of attempts), because queries
+which are the ones that actually hurt, went *up* (40.8% → 45.0% of attempts), because queries
 that used to crash now run and return something wrong instead.
 
 ### Setup C: does a bigger model buy reliability?
 
-Same family, same questions, same single-shot setup — half the parameters. Qwen2.5-Coder-3B
-instead of 7B. Because both models come from the same family, this isolates *size* rather than
-confounding it with different training data.
+Same family, same questions, same single-shot setup, same 4-bit compression — half the
+parameters. Qwen2.5-Coder-3B instead of 7B. Because both models come from the same family, this
+holds training data fixed; the compression may cost the smaller model more, so it is *size plus
+compression* being compared.
 
 | | A: the 7B | C: the 3B | change |
 |---|---|---|---|
-| pass@10 (capability) | 49.8% | 42.3% | **−7.5** |
+| pass@10 (capability) | 50.0% | 42.5% | **−7.5** |
 | pass^10 (reliability) | 36.1% | 18.8% | **−17.3** |
-| **the gap** | **13.7** | **23.6** | **+9.9** |
-| questions it's inconsistent on | 13.7% | 23.6% | +9.9 |
+| **the gap** | **13.9** | **23.8** | **+9.9** |
+| questions it's inconsistent on | 13.9% | 23.8% | +9.9 |
 | time per attempt | 3.0 s | 2.9 s | 0.96× |
 
 **Reliability falls more than twice as fast as capability.** Shrink the model and you lose 7.5
 points of "can it do this at all" — but 17.3 points of "does it do this every time."
 
 This is the clearest result in the study, because of what it implies about how models are
-normally compared. A leaderboard asks each question once, so it measures something close to the
-first row. On that row these two models look 13 points apart, which sounds like a reasonable
-trade for half the size. On the row that decides whether you can leave it running unattended,
-they are **17 points apart, and the small one keeps barely half the reliability of the large
-one**. The usual way of comparing models understates the real difference by more than double.
+normally compared. A leaderboard asks each question once: at one try these two models are 13
+points apart (43.0% vs 29.8%), and on the flattering ten-try score only 7.5 apart. On the row
+that decides whether you can leave it running unattended, they are **17 points apart, and the
+small one keeps barely half the reliability of the large one**.
+
+The gap itself rose by 9.9 points (95% interval +5.0 to +14.7), to 1.7 times the 7B's. Part of
+that is simply that the 3B solves fewer questions outright, so a fairer view compares like with
+like: of the questions each model got right at least once, the 7B got **72%** right on all ten
+tries, the 3B only **44%**.
 
 Question by question: the 3B was *more* reliable on 16 questions and *less* reliable on 102.
 
@@ -491,20 +515,20 @@ property of the model doing it.
 
 ### All three, side by side
 
-<p align="center"><img src="img/gap.svg" alt="Chart: the 7B model is right at least once on 49.8% of questions and every time on 36.1%, a gap of 13.7. With retries: 54.2% and 39.5%, gap 14.7. The 3B model: 42.3% and 18.8%, gap 23.6." width="760"></p>
+<p align="center"><img src="img/gap.svg" alt="Chart: the 7B model is right at least once on 50.0% of questions and every time on 36.1%, a gap of 13.9. With retries: 54.4% and 39.7%, gap 14.7. The 3B model: 42.5% and 18.8%, gap 23.8." width="760"></p>
 
 | | A: 7B, one shot | B: 7B, retry | C: 3B, one shot |
 |---|---|---|---|
-| pass@10 — *can* it? | 49.8% | 54.2% | 42.3% |
-| pass^10 — *always*? | 36.1% | 39.5% | 18.8% |
-| **the gap** | **13.7** | **14.7** | **23.6** |
-| ran fine, wrong rows | 40.9% | 45.2% | 32.8% |
+| pass@10 — *can* it? | 50.0% | 54.4% | 42.5% |
+| pass^10 — *always*? | 36.1% | 39.7% | 18.8% |
+| **the gap** | **13.9** | **14.7** | **23.8** |
+| ran fine, rows didn't match | 40.8% | 45.0% | 32.8% |
 | wouldn't execute | 15.9% | 8.0% | 37.3% |
 | seconds per attempt | 3.0 | 3.8 | 2.9 |
 
-**Neither thing we tried closed the gap.** Adding a retry loop raised both scores and left the
-gap where it was. Halving the model nearly doubled it — and that increase is well clear of
-noise.
+**Neither thing we tried closed the gap.** Adding a retry loop raised both scores with no
+detectable change to the gap. Halving the model widened it by 9.9 points, to 1.7 times the 7B's
+— and that increase is well clear of noise.
 
 That is the study's actual finding. In this study, the distance between what a model can do and
 what it does dependably did not yield to the obvious fixes. The only way to know its size for
@@ -521,19 +545,19 @@ them yourself from the published data.
 
 **Check 1 — the k=1 identity.** When you only make one attempt, "at least one was correct" and
 "all were correct" are the same statement. The two numbers *must* be identical at k=1. They are:
-42.9% and 42.9%. If the estimators were implemented wrongly, this is the first place it would
+43.0% and 43.0%. If the estimators were implemented wrongly, this is the first place it would
 show.
 
 **Check 2 — the k=n identity.** When k equals the number of attempts you actually made, the gap
 between the two numbers is *mathematically identical* to the fraction of questions answered
 correctly some-but-not-all of the time. These are computed by completely separate code paths:
 
-- Gap from the estimators: 49.8 − 36.1 = **13.7 points**
-- Inconsistent questions, counted directly: 68 out of 496 = **13.71%**
+- Gap from the estimators: 50.0 − 36.1 = **13.9 points**
+- Inconsistent questions, counted directly: 69 out of 496 = **13.91%**
 
 They agree. Two independent routes to the same quantity.
 
-Both identities hold for setup B as well: 46.4% = 46.4% at k=1, and 54.2 − 39.5 = 14.7 points
+Both identities hold for setup B as well: 46.6% = 46.6% at k=1, and 54.4 − 39.7 = 14.7 points
 against 73 of 496 = 14.72% inconsistent questions.
 
 **Check 3 — no AI grades the AI.** There is no "LLM as judge" anywhere in this project. A query
@@ -547,12 +571,12 @@ repeats), average them, and do that 10,000 times. That builds a picture of how m
 would wobble if we'd happened to pick a different set of questions.
 
 The middle 95% of those 10,000 averages is the interval quoted earlier: **[+2.4, +6.7] for
-capability and [+1.0, +5.8] for reliability**. Neither interval contains zero, so the
+capability and [+1.2, +6.0] for reliability**. Neither interval contains zero, so the
 improvement isn't an artefact of which questions we happened to ask.
 
 The same check matters just as much when it *fails*. Run on the gap itself, setup B's change
-comes out at **[−2.0, +4.0]** — an interval that contains zero. That is why this write-up says
-retrying left the gap about where it was, rather than claiming it made the gap worse. An earlier
+comes out at **[−2.2, +3.8]** — an interval that contains zero. That is why this write-up says
+retrying made no detectable change to the gap, rather than claiming it made the gap worse. An earlier
 draft did claim that, before this check was run on the gap; the check is now part of the
 comparison script, so the claim can't come back untested. For setup C the same check gives
 **[+5.0, +14.7]**: the smaller model's wider gap is real.
@@ -563,22 +587,33 @@ and a confidence nobody has earned. And the comparison is **paired**: each quest
 against itself across the two setups, which cancels out the fact that some questions are simply
 harder than others.
 
-**Check 5 — 251 automated tests**, run against Python 3.11, 3.12 and 3.13 on every change,
-including tests against the real databases.
+**Check 5 — 285 automated tests.** 269 run in continuous integration against Python 3.11,
+3.12 and 3.13 on every push. The other 16 need the real BIRD databases or the internet, which CI
+doesn't download, so they run locally.
 
-**Check 6 — everything is published.** All 14,940 raw attempts are in the repository: every reply,
+**Check 6 — everything is published.** All 14,940 records are in the repository — the 14,880
+scored attempts plus a placeholder for each try at the two excluded questions: every reply,
 every extracted query, both verdicts, timings, token counts. Every number above can be
 recomputed without running a model.
 
+**Check 7 — the scorer was re-checked after publication, and one bug moved the numbers.** The
+row-order rule treated a sort *inside* a reference query (a sub-query or ranking clause) as if
+the final answer had to come back in that order. That wrongly failed 17 attempts on one
+question, whose rows were right. Fixed, and every published attempt re-scored by re-running its
+query: pass@10 moved from 49.8% to 50.0% and the gap from 13.7 to 13.9. The numbers on this page
+are the corrected ones; the details are in the [run log](RUN-LOG.md#re-score--2026-09-26).
+
 ### Three honest caveats
 
-**496 questions, not 498.** Two questions have reference SQL that doesn't execute against the
-shipped database. They are flagged and excluded everywhere rather than being counted as model
+**496 questions, not 498.** Two questions have reference SQL that runs, but takes longer than
+the 30-second limit every query gets (roughly 2½ and 12–14 minutes when allowed to finish). With no reference rows
+to compare against, they are flagged and excluded everywhere rather than being counted as model
 failures — which would have been the convenient choice, since it would have made the model look
 worse and the finding look bigger.
 
 **These results describe one model, at one setting.** Qwen2.5-Coder-7B at 4-bit, temperature
-0.2, measured 2026-09-16 to 2026-09-17. They do not automatically transfer to larger hosted
+0.2, measured 2026-09-16 to 2026-09-17, against an answer key that fixes the SQL but keeps the
+questions' original ambiguities. They do not automatically transfer to larger hosted
 models, and this study doesn't claim they do.
 
 **Setup B's retry loop is one design, not the only one.** It retries on execution errors, up to
@@ -593,9 +628,10 @@ the best possible one.
 If you were building a product on this model, here's the practical translation. Out of every 100
 questions:
 
-- About **36** get a correct answer every single time. These are safe.
-- About **14** get a correct answer *sometimes*. These are the dangerous ones — they'll pass your
-  testing and fail in production, intermittently, with no error.
+- About **36** were right on all ten tries. That is strong evidence, not a guarantee: a
+  question that fails 1 time in 20 still passes ten tries in a row about 60% of the time.
+- About **14** get a correct answer *sometimes*. These are the dangerous ones — they can pass
+  your testing and fail later, intermittently, with no error.
 - About **50** essentially never work.
 
 The middle group is the discovery. They don't show up as a known limitation, because on the day
@@ -607,16 +643,17 @@ you tested, they worked.
    measuring luck. The smaller model lost more than twice as much reliability as capability —
    a difference a single run would never show you.
 2. **Error handling is not enough.** Most failures here never raise an error. Catching exceptions
-   catches 16% of the problem, and an agent loop built on those exceptions fixed one in six of
-   the crashes it saw — 5% of all wrong answers.
-3. **Measure on your own database.** The gap varied from 0 to 31.4 points across schemas, and a
-   database that looked perfectly consistent on one model came apart on another.
+   catches 16% of the problem, and an agent loop built on those exceptions fixed fewer than one in
+   five of the crashes it saw — 5% of all wrong answers.
+3. **Measure on your own database.** The gap varied from 0 to 22.7 points across databases for
+   the 7B, and from 10.0 to 31.4 for the 3B; a database that looked perfectly consistent on one
+   model came apart on another.
 4. **Don't buy a smaller model on its benchmark score.** The 3B gave up 7.5 points of capability
    and 17.3 of reliability — and, on this hardware, was not faster. Whatever you are trading
    size for, check that you are actually getting it.
-5. **The safe questions are genuinely safe.** 36% consistently correct is a real, usable
+5. **The consistent questions are a real asset.** 36% right on all ten tries is a real, usable
    capability — it just needs to be identified by repetition rather than assumed from a headline
-   number.
+   number, and re-checked as usage grows, because more repetitions can only lower it.
 
 ---
 
@@ -637,9 +674,10 @@ code. Specific defences, each guarding against a specific way this could have go
 - **Self-correction never sees the answer.** Setup B gets the database's error message and
   nothing else. A model allowed to see the answer key would converge on it and the number would
   be meaningless.
-- **Temperature 0 is refused outright.** At temperature 0 every repetition is nearly identical,
-  the gap collapses to zero, and the "result" would describe a decoding setting rather than the
-  model. The runner errors out rather than produce that number.
+- **Temperature 0 needs an explicit flag.** A temperature-0 run asks a different question (is
+  "always pick the likeliest word" actually repeatable?), so the runner refuses it unless asked
+  with `--allow-greedy`, rather than let it be mixed into these results by accident. It is the
+  next experiment.
 - **Every raw reply is kept**, so nobody has to trust the analysis code — including its author.
 
 ### Three bugs found while building it
@@ -657,6 +695,11 @@ Worth stating, because "it worked first time" is rarely true and usually means n
    bug like this inflates precisely the unreliability the project reports.
 3. **The swallowed-error bug.** A network error class was caught by the wrong handler, so server
    rejections would have been silently retried instead of reported.
+
+Two more were found in a later review of the published results, and fixed with tests: the
+row-order rule reading a sort inside a sub-query as an order requirement (Check 7 in §9), and an
+empty query counting as one that ran. The first moved the headline by 0.2 points; the second
+affected no published attempt.
 
 ---
 
@@ -682,9 +725,9 @@ That token count is the point. **On a typical free API tier, Setup A alone would
 eight days** — and that's why nobody publishes this number. Reliability only becomes visible
 through repetition, and repetition is exactly what a metered API makes expensive. Running
 locally removes the quota, which is why k can be 10 here instead of the 2 or 3 a free tier
-allows. Look again at §8: at k=2 the gap reads 5.1 points; at k=10 it reads 13.7. For the 3B it
-is 8.1 at k=2 against 23.6 at k=10. A budget-constrained study would have found roughly a third
-of the real effect in both cases.
+allows. Look again at §8: at k=2 the gap reads 5.3 points; at k=10 it reads 13.9. For the 3B it
+is 8.2 at k=2 against 23.8 at k=10. A budget-constrained study would have found roughly a third
+to two-fifths of the real effect.
 
 It also means anyone can reproduce this, which is the difference between a result and a claim.
 
@@ -694,11 +737,14 @@ It also means anyone can reproduce this, which is the difference between a resul
 
 | Setup | State |
 |---|---|
-| **A** — 7B, single attempt | ✅ Complete. 4,980 attempts published. |
-| **B** — 7B, self-correcting | ✅ Complete. 4,980 attempts published. |
-| **C** — 3B, single attempt | ✅ Complete. 4,980 attempts published. |
+| **A** — 7B, single attempt | ✅ Complete. 4,960 scored attempts published (4,980 records). |
+| **B** — 7B, self-correcting | ✅ Complete. 4,960 scored attempts published (4,980 records). |
+| **C** — 3B, single attempt | ✅ Complete. 4,960 scored attempts published (4,980 records). |
 
-251 tests passing. Continuous integration green on Python 3.11, 3.12 and 3.13.
+285 tests passing locally, 269 of them in continuous integration on Python 3.11, 3.12 and 3.13.
+
+Next: a temperature-0 run; a rerun on the fully corrected answer key; the 3B at 8-bit; a
+current-generation open model that fits 8 GB.
 
 Raw results: [`results/final/`](../results/final/) — one file per setup, one line per attempt.
 
@@ -719,7 +765,7 @@ Raw results: [`results/final/`](../results/final/) — one file per setup, one l
 | **Execution accuracy** | Judging a query by the rows it returns, not the text it's written in |
 | **Benchmark** | A shared set of test questions with known answers |
 | **BIRD** | The standard text-to-SQL benchmark, whose answer key has documented errors |
-| **Arcwise-Plat-SQL** | The expert-corrected subset of BIRD this study uses |
+| **Arcwise-Plat-SQL** | The version of BIRD Mini-Dev this study uses: reference SQL corrected by experts, questions left as written |
 | **Agentic loop** | Letting the model run its query, read the error, and try again |
 | **Temperature** | How random the model's output is. Above zero the same prompt can give different answers — the entire reason this study exists. |
 | **Quantisation (Q4)** | Compressing a model to fit in less memory, at a small cost in quality |
@@ -728,7 +774,7 @@ Raw results: [`results/final/`](../results/final/) — one file per setup, one l
 | **Schema** | The structure of a database — its tables and columns |
 | **Ollama** | Software for running AI models on your own computer |
 | **Estimator** | A formula for working out a number from a sample. "Unbiased" means it isn't tilted high or low on average. |
-| **Bootstrap / confidence interval** | The luck check. Re-draw the questions at random 10,000 times and see how much a result moves. A 95% interval is the range it stays inside 95% of the time; if that range includes zero, the difference could be chance. |
+| **Bootstrap / confidence interval** | The luck check. Re-draw the questions at random, with replacement, 10,000 times and see how much a result moves. A 95% interval is the range it stays inside 95% of the time; if that range includes zero, the difference could be chance. |
 | **Within noise** | A difference small enough that chance alone could explain it |
 | **Multiset** | A list where order doesn't matter but duplicates do — how returned rows are compared |
 | **JSONL** | A text file with one JSON record per line — how results are stored here |
@@ -745,4 +791,5 @@ Raw results: [`results/final/`](../results/final/) — one file per setup, one l
 - pass@k estimator — Chen et al., 2021: [arXiv:2107.03374](https://arxiv.org/abs/2107.03374)
 - pass^k as a reliability measure — τ-bench, Sierra:
   [arXiv:2406.12045](https://arxiv.org/abs/2406.12045)
-- BIRD benchmark: [bird-bench.github.io](https://bird-bench.github.io/)
+- BIRD benchmark — Li et al., NeurIPS 2023: [arXiv:2305.03111](https://arxiv.org/abs/2305.03111),
+  [bird-bench.github.io](https://bird-bench.github.io/) (CC BY-SA 4.0)
