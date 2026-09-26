@@ -67,8 +67,7 @@ This works well enough that companies are building products on it.
 ### How the field measures whether it works
 
 Researchers use shared test sets — a few hundred questions with known-correct answers. You point
-your AI at them, count how many it gets right, and publish the percentage. Good systems report
-60–70%.
+your AI at them, count how many it gets right, and publish the percentage.
 
 ### The hole in that measurement
 
@@ -78,8 +77,8 @@ AI language models, as usually run, are not deterministic. They pick each word u
 question asked twice can produce two different answers. That's not a defect — it's how they
 work, and it's what lets them be creative.
 
-But it means a published score of 65% tells you: *when we asked these questions one time each,
-65% of the answers were right.* It does not tell you what happens when you ask again.
+But it means a published score of, say, 65% tells you: *when we asked these questions one time
+each, 65% of the answers were right.* It does not tell you what happens when you ask again.
 
 And "ask again" is the normal case. A dashboard refreshing hourly asks the same question 24
 times a day. What you need to know is not "can it do this?" but **"does it do this every
