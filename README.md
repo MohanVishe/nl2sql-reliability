@@ -5,7 +5,7 @@
 ![cost](https://img.shields.io/badge/cost-%240-brightgreen)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
-AI can turn a plain-English question — *"which customers spent the most last month?"* — into
+AI can turn a plain-English question, such as *"which customers spent the most last month?"*, into
 **SQL**, the language databases understand. Most leaderboards score this by asking each
 question **once**. But AI sampled with any randomness can give a different answer when you ask
 again.
@@ -80,7 +80,7 @@ try again, up to three times. That's what most "AI agents" do.
 → Both scores went up a little (+4.4 and +3.6 points). **But there was no detectable change in
 the gap** (13.9 → 14.7: +0.8 points, 95% interval −2.2 to +3.8). The retry only kicks in when
 something *crashes*, so it never sees the silent mistakes. Even on the crashes it could see, it
-turned fewer than **1 in 5** into a right answer (18%); counting every wrong answer, it fixed
+turned fewer than **1 in 5** into a right answer (18%). Counting every wrong answer, it fixed
 about **1 in 20**. And some crashes it "fixed" just became silent wrong answers instead.
 
 **📉 Use a smaller, cheaper AI.** Same family and the same 4-bit compression, half the size.
@@ -116,7 +116,7 @@ check the rows that come back**
   7 billion *parameters* — the internal numbers a model learns. More parameters usually means a
   more capable, but slower and more memory-hungry, model.)
 - **Free, open models** ([Qwen2.5-Coder](https://github.com/QwenLM/Qwen2.5-Coder)) running on my
-  own computer. Big hosted models like GPT or Claude weren't part of this round; the same
+  own computer. Big hosted models like GPT or Claude weren't part of this round. The same
   harness can test them.
 - **14,880 scored generations** (14,940 records; 2 questions excluded because their reference
   query takes longer than the 30-second limit), all run locally on one desktop GPU. **Cost: $0.**
@@ -145,9 +145,9 @@ check the rows that come back**
 - **Two built-in math checks** confirm the scoring is right — both pass for all three setups.
 - **Every change is tested for luck.** Could a difference just be chance — a few easy questions
   landing on one side? I resampled the questions with replacement 10,000 times and checked
-  whether the difference survives. The score changes above all do; the only one that doesn't is
+  whether the difference survives. The score changes above all do. The only one that doesn't is
   the retry loop's small gap change, which is why it's reported as "no detectable change".
-- **285 automated tests.** 269 run in CI on Python 3.11, 3.12 and 3.13 on every push; the 16
+- **285 automated tests.** 269 run in CI on Python 3.11, 3.12 and 3.13 on every push. The 16
   that need the BIRD databases or the internet run locally.
 
 ## Limitations, and what's next
